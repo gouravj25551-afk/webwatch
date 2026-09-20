@@ -1,5 +1,5 @@
 const { setTimeout: wait } = require('node:timers/promises');
-const { Agent } = require('undici');
+const { Agent, request } = require('undici');
 const { validatePublicUrl } = require('./urlSafety');
 
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
@@ -28,9 +28,9 @@ async function checkOnce(inputUrl, timeoutMs = 5_000) {
       const dispatcher = pinnedAgent(target);
 
       try {
-        const response = await fetch(parsedUrl.toString(), {
+        const response = await request(parsedUrl.toString(), {
           method: 'GET',
-          redirect: 'manual',
+          maxRedirections: 0,
           signal: AbortSignal.timeout(timeoutMs),
           dispatcher,
           headers: {
@@ -39,17 +39,17 @@ async function checkOnce(inputUrl, timeoutMs = 5_000) {
           },
         });
 
-        if (REDIRECT_CODES.has(response.status) && response.headers.get('location')) {
-          await response.body?.cancel();
-          currentUrl = new URL(response.headers.get('location'), parsedUrl).toString();
+        if (REDIRECT_CODES.has(response.statusCode) && response.headers.location) {
+          response.body.destroy();
+          currentUrl = new URL(response.headers.location, parsedUrl).toString();
           continue;
         }
 
-        await response.body?.cancel();
+        response.body.destroy();
         return {
           url: parsedUrl.toString(),
-          isUp: response.status >= 200 && response.status < 400,
-          statusCode: response.status,
+          isUp: response.statusCode >= 200 && response.statusCode < 400,
+          statusCode: response.statusCode,
           responseTimeMs: Date.now() - startedAt,
           error: null,
         };
