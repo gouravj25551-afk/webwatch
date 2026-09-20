@@ -21,6 +21,7 @@
     "vite": "^8.3.0"
   },
   "optionalDependencies": {
-    "@rolldown/binding-linux-x64-gnu": "1.2.9"
+    "@rolldown/binding-linux-x64-gnu": "1.2.9",
+    "lightningcss-linux-x64-gnu": "1.33.0"
   }
 }
