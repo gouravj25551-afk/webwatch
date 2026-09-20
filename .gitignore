@@ -10,3 +10,5 @@ node_modules/
 coverage/
 .vercel
 .env*
+.agents/
+skills-lock.json
