@@ -45,9 +45,28 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const currentCount = await prisma.monitor.count({ where: { userId: req.user.id } });
-    if (currentCount >= config.maxMonitorsPerUser) {
-      return res.status(403).json({ success: false, message: `Free beta allows ${config.maxMonitorsPerUser} monitors` });
+    const [currentCount, user] = await Promise.all([
+      prisma.monitor.count({ where: { userId: req.user.id } }),
+      prisma.user.findUnique({ where: { id: req.user.id }, select: { paidMonitorsCount: true } }),
+    ]);
+
+    const paidSlots = user ? user.paidMonitorsCount : 0;
+
+    if (config.billingEnabled && currentCount >= paidSlots) {
+      return res.status(402).json({
+        success: false,
+        requiresPayment: true,
+        paidMonitorsCount: paidSlots,
+        currentCount,
+        message: 'A $1.00 payment via Dodo Payments is required to monitor a new site.',
+      });
+    }
+
+    if (!config.billingEnabled && currentCount >= config.maxMonitorsPerUser) {
+      return res.status(403).json({
+        success: false,
+        message: `Free beta allows ${config.maxMonitorsPerUser} monitors`,
+      });
     }
 
     const { parsedUrl } = await validatePublicUrl(req.body.url);
@@ -63,8 +82,8 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Enter a valid alert email' });
     }
 
-    if (![1, 5, 10, 15].includes(intervalMinutes)) {
-      return res.status(400).json({ success: false, message: 'Interval must be 1, 5, 10, or 15 minutes' });
+    if (![5, 10, 15].includes(intervalMinutes)) {
+      return res.status(400).json({ success: false, message: 'Interval must be 5, 10, or 15 minutes' });
     }
 
     const monitor = await prisma.monitor.create({
@@ -116,8 +135,8 @@ router.patch('/:id', async (req, res, next) => {
     }
     if (req.body.intervalMinutes !== undefined) {
       const intervalMinutes = Number(req.body.intervalMinutes);
-      if (![1, 5, 10, 15].includes(intervalMinutes)) {
-        return res.status(400).json({ success: false, message: 'Interval must be 1, 5, 10, or 15 minutes' });
+      if (![5, 10, 15].includes(intervalMinutes)) {
+        return res.status(400).json({ success: false, message: 'Interval must be 5, 10, or 15 minutes' });
       }
       data.intervalMinutes = intervalMinutes;
     }

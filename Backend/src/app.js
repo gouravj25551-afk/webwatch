@@ -6,6 +6,8 @@ const { rateLimit } = require('express-rate-limit');
 const config = require('./config');
 const authRoutes = require('./routes/auth');
 const monitorRoutes = require('./routes/monitors');
+const billingRoutes = require('./routes/billing');
+const webhookRoutes = require('./routes/webhooks');
 const { checkWebsite } = require('./services/websiteChecker');
 const { runDueMonitors } = require('./services/scheduler');
 const errorHandler = require('./middleware/errorHandler');
@@ -14,6 +16,10 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: config.clientOrigin, credentials: true }));
+
+// Raw body parser for Dodo Payments webhooks before JSON parsing
+app.use('/api/webhooks', webhookRoutes);
+
 app.use(express.json({ limit: '20kb' }));
 app.use(cookieParser());
 app.use(rateLimit({
@@ -60,6 +66,7 @@ app.get('/api/cron', async (req, res, next) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/monitors', monitorRoutes);
+app.use('/api/billing', billingRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

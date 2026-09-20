@@ -1,23 +1,25 @@
 # WebWatch
 
-WebWatch is a small uptime-monitoring platform. Users create an account, add a public website or API, and receive downtime and recovery alerts after WebWatch verifies a failure with retries.
+WebWatch is a small uptime-monitoring platform. Users create an account, add a public website or API, and track downtime and recovery after WebWatch verifies a failure with retries. Email delivery activates when Resend is configured.
+
+**Live beta:** https://webwatch-gamma.vercel.app
 
 ## Current MVP
 
 - Email/password accounts with an HTTP-only session cookie
 - PostgreSQL storage through Prisma
-- Up to 10 monitors per beta account
-- Automatic 1, 5, 10, or 15-minute checks
+- Up to 10 monitors per free beta account
+- Automatic 5, 10, or 15-minute checks
 - Three attempts before declaring downtime
 - Downtime incidents and recovery detection
-- Resend email integration with local preview mode
+- Resend email integration with local preview mode; production delivery requires a verified sender
 - Pause, resume, delete, and check-now actions
 - 7-day check history, incident history, response chart, and 30-day uptime percentage
 - API rate limiting and security headers
 - SSRF protection for local, private, and reserved destinations, including redirect validation and DNS address pinning
 - Responsive React dashboard
 
-Payments are intentionally excluded from this version.
+The codebase includes a disabled Dodo Payments integration for a future $1-per-monitor plan. Free beta mode stays active until billing credentials are configured and `BILLING_ENABLED=true` is set.
 
 ## Architecture
 
@@ -101,6 +103,11 @@ Never place the Resend key in the frontend.
 | `RESEND_API_KEY` | Enables real email delivery | Empty/preview mode |
 | `ALERT_FROM` | Resend sender identity | Resend onboarding sender |
 | `CRON_SECRET` | Protects the production scheduler endpoint | Required for `/api/cron` |
+| `BILLING_ENABLED` | Enables paid monitor slots | `false` |
+| `DODO_PAYMENTS_API_KEY` | Creates Dodo checkout sessions | Required when billing is enabled |
+| `DODO_PAYMENTS_WEBHOOK_KEY` | Verifies Dodo payment webhooks | Required when billing is enabled |
+| `DODO_PAYMENTS_PRODUCT_ID` | Dodo product used for a monitor slot | Required when billing is enabled |
+| `DODO_PAYMENTS_MODE` | Selects Dodo test or live API | `test_mode` |
 
 ## API overview
 
@@ -112,6 +119,7 @@ Never place the Resend key in the frontend.
 - `POST /api/auth/login` — start a session
 - `POST /api/auth/logout` — clear the session
 - `GET /api/auth/me` — return the signed-in user
+- `POST /api/webhooks/dodo` — receive verified Dodo payment events
 
 ### Authenticated monitors
 
@@ -128,6 +136,7 @@ Never place the Resend key in the frontend.
 - **Monitor** — URL, alert destination, interval, and current state
 - **Check** — status code, response time, error, and retry count
 - **Incident** — downtime start and recovery time
+- **Payment** — future Dodo checkout and monitor-slot purchase
 
 Deleting a user or monitor cascades to its related history.
 
@@ -151,9 +160,9 @@ npm run build
 
 ## Deployment notes
 
-The repository includes Vercel configuration for the React frontend and Express API. Production also needs a managed PostgreSQL database, environment variables, and a scheduler that calls `GET /api/cron` with `Authorization: Bearer <CRON_SECRET>`.
+The repository includes Vercel configuration for the React frontend and Express API. Production uses Neon PostgreSQL. The GitHub Actions scheduler calls `GET /api/cron` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
 
-Vercel Hobby cron jobs run only once per day, which is not frequent enough for WebWatch's 1 to 15-minute monitoring intervals. Use Vercel Pro cron, a separate worker, or an external scheduler for automatic monitoring. Manual checks still work through the deployed API.
+GitHub scheduled workflows can start later than their requested time during periods of high load. Move the scheduler to a dedicated worker or Vercel Pro before offering a strict monitoring SLA.
 
 This MVP scheduler is designed for one worker. Before running multiple workers, add a distributed queue or database claim/lease so two workers cannot execute the same monitor simultaneously.
 
