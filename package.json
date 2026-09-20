@@ -11,7 +11,11 @@
     "build": "npm run build --workspace=webwatch-frontend",
     "lint": "npm run lint --workspace=webwatch-frontend",
     "test": "npm test --workspace=webwatch-backend",
-    "postinstall": "npm run prisma:generate --workspace=webwatch-backend"
+    "postinstall": "prisma generate --schema Backend/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "6.12.0",
+    "prisma": "6.12.0"
   },
   "engines": {
     "node": ">=22"
