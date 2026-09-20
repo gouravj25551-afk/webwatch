@@ -37,6 +37,19 @@ Express API (3001) ---- Prisma ---- PostgreSQL
 
 PostgreSQL is the source of truth. When the backend restarts, its scheduler scans the database and runs monitors whose next check is due.
 
+## Dedicated worker
+
+Run the API and worker as separate processes in production:
+
+```bash
+npm start --workspace=webwatch-backend
+npm run worker --workspace=webwatch-backend
+```
+
+The worker scans PostgreSQL every 30 seconds and checks only monitors whose configured interval has elapsed. A database lease prevents two worker or scheduler processes from checking the same monitor simultaneously. If a worker crashes, its lease expires after two minutes and another process can safely retry the monitor.
+
+The worker needs `DATABASE_URL`, `JWT_SECRET`, `CHECK_INTERVAL_MS`, `RESEND_API_KEY`, and `ALERT_FROM`. It does not accept public HTTP traffic.
+
 ## Quick start
 
 ### Requirements
@@ -160,9 +173,9 @@ npm run build
 
 ## Deployment notes
 
-The repository includes Vercel configuration for the React frontend and Express API. Production uses Neon PostgreSQL. The GitHub Actions scheduler calls `GET /api/cron` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
+The repository includes Vercel configuration for the React frontend and Express API. Production uses Neon PostgreSQL. Until the dedicated worker is deployed and verified, the GitHub Actions scheduler calls `GET /api/cron` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
 
-GitHub scheduled workflows can start later than their requested time during periods of high load. Move the scheduler to a dedicated worker or Vercel Pro before offering a strict monitoring SLA.
+After the dedicated worker has been healthy for at least one day, disable the GitHub scheduler to avoid unnecessary fallback runs. Keep the protected `/api/cron` endpoint for emergency manual runs.
 
 This MVP scheduler is designed for one worker. Before running multiple workers, add a distributed queue or database claim/lease so two workers cannot execute the same monitor simultaneously.
 

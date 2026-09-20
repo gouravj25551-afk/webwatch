@@ -53,6 +53,7 @@ model Monitor {
   lastResponseTimeMs  Int?
   lastError           String?
   consecutiveFailures Int           @default(0)
+  checkLeaseUntil     DateTime?
   userId              String
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   checks              Check[]
@@ -62,6 +63,7 @@ model Monitor {
 
   @@index([userId])
   @@index([enabled, lastCheckedAt])
+  @@index([checkLeaseUntil])
 }
 
 model Check {

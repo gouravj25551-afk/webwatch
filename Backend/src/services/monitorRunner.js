@@ -7,8 +7,25 @@ const runningMonitorIds = new Set();
 async function runMonitor(monitorId) {
   if (runningMonitorIds.has(monitorId)) return null;
   runningMonitorIds.add(monitorId);
+  let claimed = false;
 
   try {
+    const now = new Date();
+    const claim = await prisma.monitor.updateMany({
+      where: {
+        id: monitorId,
+        enabled: true,
+        OR: [
+          { checkLeaseUntil: null },
+          { checkLeaseUntil: { lt: now } },
+        ],
+      },
+      data: { checkLeaseUntil: new Date(now.getTime() + 2 * 60_000) },
+    });
+
+    if (claim.count === 0) return null;
+    claimed = true;
+
     const monitor = await prisma.monitor.findUnique({
       where: { id: monitorId },
       include: { user: { select: { email: true } } },
@@ -96,6 +113,12 @@ async function runMonitor(monitorId) {
 
     return prisma.monitor.findUnique({ where: { id: monitor.id } });
   } finally {
+    if (claimed) {
+      await prisma.monitor.updateMany({
+        where: { id: monitorId },
+        data: { checkLeaseUntil: null },
+      }).catch((error) => console.error(`Could not release monitor lease ${monitorId}:`, error.message));
+    }
     runningMonitorIds.delete(monitorId);
   }
 }
