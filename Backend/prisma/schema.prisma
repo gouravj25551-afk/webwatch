@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MonitorStatus {
+  UNKNOWN
+  UP
+  DOWN
+  PAUSED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  monitors     Monitor[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Monitor {
+  id                  String        @id @default(uuid())
+  name                String
+  url                 String
+  alertEmail          String
+  intervalMinutes     Int           @default(5)
+  enabled             Boolean       @default(true)
+  status              MonitorStatus @default(UNKNOWN)
+  lastCheckedAt       DateTime?
+  lastStatusCode      Int?
+  lastResponseTimeMs  Int?
+  lastError           String?
+  consecutiveFailures Int           @default(0)
+  userId              String
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checks              Check[]
+  incidents           Incident[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([enabled, lastCheckedAt])
+}
+
+model Check {
+  id             String   @id @default(uuid())
+  monitorId      String
+  monitor        Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  isUp           Boolean
+  statusCode     Int?
+  responseTimeMs Int
+  error          String?
+  attempts       Int      @default(1)
+  checkedAt      DateTime @default(now())
+
+  @@index([monitorId, checkedAt])
+}
+
+model Incident {
+  id          String    @id @default(uuid())
+  monitorId   String
+  monitor     Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  startedAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+  startReason String?
+
+  @@index([monitorId, startedAt])
+  @@index([monitorId, resolvedAt])
+}

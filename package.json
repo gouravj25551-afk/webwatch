@@ -1,0 +1,19 @@
+{
+  "name": "webwatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebWatch uptime monitoring platform",
+  "workspaces": [
+    "Frontend",
+    "Backend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=webwatch-frontend",
+    "lint": "npm run lint --workspace=webwatch-frontend",
+    "test": "npm test --workspace=webwatch-backend",
+    "postinstall": "npm run prisma:generate --workspace=webwatch-backend"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
