@@ -1,0 +1,12 @@
+import { Link } from 'react-router-dom'
+import { Empty } from '../components/ui.jsx'
+
+export default function NotFound() {
+  return (
+    <div className="page">
+      <Empty title="Page not found">
+        <Link className="btn" to="/">Back to dashboard</Link>
+      </Empty>
+    </div>
+  )
+}

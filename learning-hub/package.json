@@ -1,0 +1,22 @@
+{
+  "name": "webwatch-academy",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive learning hub for understanding the WebWatch codebase",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check:data": "node scripts/check-data.js"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.9.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.0"
+  }
+}

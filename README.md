@@ -50,6 +50,10 @@ The worker scans PostgreSQL every 30 seconds and checks only monitors whose conf
 
 The worker needs `DATABASE_URL`, `JWT_SECRET`, `CHECK_INTERVAL_MS`, `RESEND_API_KEY`, and `ALERT_FROM`. It does not accept public HTTP traffic.
 
+## Learning hub
+
+`learning-hub/` contains WebWatch Academy, a separate React app that teaches this codebase milestone by milestone. It does not affect the product. Run it with `cd learning-hub && npm install && npm run dev`. See [learning-hub/README.md](learning-hub/README.md).
+
 ## Quick start
 
 ### Requirements
