@@ -165,7 +165,7 @@ function DodoCheckoutModal({ open, onClose }) {
 function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   const [open, setOpen] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
-  const [form, setForm] = useState({ name: '', url: '', alertEmail: user.email, intervalMinutes: 5 })
+  const [form, setForm] = useState({ name: '', url: '', intervalMinutes: 5 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -188,7 +188,7 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
       const data = await api('/api/monitors', { method: 'POST', body: JSON.stringify(form) })
       onCreated(data.monitor)
       if (onRefreshBilling) onRefreshBilling()
-      setForm({ name: '', url: '', alertEmail: user.email, intervalMinutes: 5 })
+      setForm({ name: '', url: '', intervalMinutes: 5 })
       setOpen(false)
     } catch (requestError) {
       if (requestError.status === 402 || (requestError.data && requestError.data.requiresPayment)) {
@@ -240,7 +240,7 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
                 />
                 <small>https:// will be added automatically if you leave it out.</small>
               </label>
-              <label>Alert email <small>delivery will activate after email setup</small><input type="email" value={form.alertEmail} onChange={(event) => setForm({ ...form, alertEmail: event.target.value })} required /></label>
+              <label>Alert email <small>Alerts are sent to your WebWatch account email.</small><input type="email" value={user.email} readOnly /></label>
               <label>Check every<select value={form.intervalMinutes} onChange={(event) => setForm({ ...form, intervalMinutes: Number(event.target.value) })}><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
               {error && <p className="form-error">{error}</p>}
               <div className="modal-actions"><button type="button" className="secondary" onClick={() => setOpen(false)}>Cancel</button><button className="primary" disabled={loading}>{loading ? 'Creating and checking…' : 'Start monitoring'}</button></div>
