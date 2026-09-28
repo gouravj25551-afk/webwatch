@@ -5,12 +5,13 @@
   "description": "WebWatch uptime monitoring platform",
   "workspaces": [
     "Frontend",
-    "Backend"
+    "Backend",
+    "cloudflare-scheduler"
   ],
   "scripts": {
     "build": "npm run build --workspace=webwatch-frontend",
     "lint": "npm run lint --workspace=webwatch-frontend",
-    "test": "npm test --workspace=webwatch-backend"
+    "test": "npm test --workspace=webwatch-backend && npm test --workspace=webwatch-cloudflare-scheduler"
   },
   "engines": {
     "node": ">=22"

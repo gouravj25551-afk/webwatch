@@ -54,6 +54,10 @@ The worker needs `DATABASE_URL`, `JWT_SECRET`, `CHECK_INTERVAL_MS`, `RESEND_API_
 
 `learning-hub/` contains WebWatch Academy, a separate React app that teaches this codebase milestone by milestone. It does not affect the product. Run it with `cd learning-hub && npm install && npm run dev`. See [learning-hub/README.md](learning-hub/README.md).
 
+## Cloudflare scheduler for the early beta
+
+For a small free beta, `cloudflare-scheduler/` provides a free five-minute Cron Trigger that securely calls the protected `/api/cron` endpoint. It is a serverless scheduler rather than a continuously running worker. Keep the database lease enabled, and disable the GitHub Actions schedule only after the Cloudflare trigger has been verified in production.
+
 ## Quick start
 
 ### Requirements
