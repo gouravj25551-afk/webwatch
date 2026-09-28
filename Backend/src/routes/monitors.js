@@ -8,8 +8,13 @@ const { runMonitor } = require('../services/monitorRunner');
 const router = express.Router();
 router.use(requireAuth);
 
-function validEmail(email) {
-  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function cleanMonitorName(value, fallback) {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || fallback;
 }
 
 async function monitorWithStats(monitor) {
@@ -37,7 +42,8 @@ router.get('/', async (req, res, next) => {
       where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
-    return res.json({ success: true, monitors: await Promise.all(monitors.map(monitorWithStats)) });
+    const ownedMonitors = monitors.map((monitor) => ({ ...monitor, alertEmail: req.user.email }));
+    return res.json({ success: true, monitors: await Promise.all(ownedMonitors.map(monitorWithStats)) });
   } catch (error) {
     return next(error);
   }
@@ -70,17 +76,8 @@ router.post('/', async (req, res, next) => {
     }
 
     const { parsedUrl } = await validatePublicUrl(req.body.url);
-    const name = typeof req.body.name === 'string' && req.body.name.trim()
-      ? req.body.name.trim().slice(0, 80)
-      : parsedUrl.hostname;
-    const alertEmail = req.body.alertEmail
-      ? String(req.body.alertEmail).trim().toLowerCase()
-      : req.user.email;
+    const name = cleanMonitorName(req.body.name, parsedUrl.hostname);
     const intervalMinutes = Number(req.body.intervalMinutes || 5);
-
-    if (!validEmail(alertEmail)) {
-      return res.status(400).json({ success: false, message: 'Enter a valid alert email' });
-    }
 
     if (![5, 10, 15].includes(intervalMinutes)) {
       return res.status(400).json({ success: false, message: 'Interval must be 5, 10, or 15 minutes' });
@@ -91,7 +88,7 @@ router.post('/', async (req, res, next) => {
         userId: req.user.id,
         name,
         url: parsedUrl.toString(),
-        alertEmail,
+        alertEmail: req.user.email,
         intervalMinutes,
       },
     });
@@ -122,7 +119,9 @@ router.patch('/:id', async (req, res, next) => {
     if (!monitor) return res.status(404).json({ success: false, message: 'Monitor not found' });
 
     const data = {};
-    if (typeof req.body.name === 'string' && req.body.name.trim()) data.name = req.body.name.trim().slice(0, 80);
+    if (typeof req.body.name === 'string' && req.body.name.trim()) {
+      data.name = cleanMonitorName(req.body.name, monitor.name);
+    }
     if (typeof req.body.enabled === 'boolean') {
       data.enabled = req.body.enabled;
       data.status = req.body.enabled ? 'UNKNOWN' : 'PAUSED';
@@ -130,9 +129,14 @@ router.patch('/:id', async (req, res, next) => {
     }
     if (req.body.alertEmail !== undefined) {
       const alertEmail = String(req.body.alertEmail).trim().toLowerCase();
-      if (!validEmail(alertEmail)) return res.status(400).json({ success: false, message: 'Enter a valid alert email' });
-      data.alertEmail = alertEmail;
+      if (alertEmail !== req.user.email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Alert email must match your WebWatch account email',
+        });
+      }
     }
+    data.alertEmail = req.user.email;
     if (req.body.intervalMinutes !== undefined) {
       const intervalMinutes = Number(req.body.intervalMinutes);
       if (![5, 10, 15].includes(intervalMinutes)) {
@@ -189,7 +193,14 @@ router.get('/:id/history', async (req, res, next) => {
 
     const upChecks = checks.filter((check) => check.isUp).length;
     const uptimePercentage = checks.length ? Number(((upChecks / checks.length) * 100).toFixed(2)) : null;
-    return res.json({ success: true, monitor, checks, incidents, uptimePercentage, days });
+    return res.json({
+      success: true,
+      monitor: { ...monitor, alertEmail: req.user.email },
+      checks,
+      incidents,
+      uptimePercentage,
+      days,
+    });
   } catch (error) {
     return next(error);
   }

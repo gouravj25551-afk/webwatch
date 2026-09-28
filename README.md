@@ -101,9 +101,11 @@ Open `http://localhost:5173`.
 
 Without a `RESEND_API_KEY`, alerts run in preview mode and are printed in the backend terminal. This lets the full incident flow work locally without sending email.
 
+During the beta, alerts are sent only to the monitor owner's WebWatch account email. Supporting additional recipients requires a separate email-verification flow.
+
 For real email delivery:
 
-1. Create a Resend account and verify a sending domain.
+1. Create a Resend account and verify a sending domain that you own.
 2. Set `RESEND_API_KEY` in `Backend/.env`.
 3. Set `ALERT_FROM` to an address on the verified domain.
 4. Restart the backend.

@@ -33,6 +33,7 @@ async function runMonitor(monitorId) {
 
     if (!monitor || !monitor.enabled) return null;
 
+    const alertRecipient = monitor.user.email;
     const result = await checkWebsite(monitor.url, { attempts: 3, timeoutMs: 5_000 });
     let alert = null;
 
@@ -71,6 +72,7 @@ async function runMonitor(monitorId) {
             lastResponseTimeMs: result.responseTimeMs,
             lastError: null,
             consecutiveFailures: 0,
+            alertEmail: alertRecipient,
           },
         });
       } else {
@@ -98,6 +100,7 @@ async function runMonitor(monitorId) {
             lastResponseTimeMs: result.responseTimeMs,
             lastError: result.error,
             consecutiveFailures: { increment: 1 },
+            alertEmail: alertRecipient,
           },
         });
       }
@@ -105,7 +108,13 @@ async function runMonitor(monitorId) {
 
     if (alert) {
       try {
-        await sendAlert({ type: alert.type, monitor, result, incident: alert.incident });
+        await sendAlert({
+          type: alert.type,
+          monitor,
+          result,
+          incident: alert.incident,
+          recipient: alertRecipient,
+        });
       } catch (error) {
         console.error(`Alert delivery failed for monitor ${monitor.id}:`, error.message);
       }
