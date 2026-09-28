@@ -54,6 +54,10 @@ The worker needs `DATABASE_URL`, `JWT_SECRET`, `CHECK_INTERVAL_MS`, `RESEND_API_
 
 `learning-hub/` contains WebWatch Academy, a separate React app that teaches this codebase milestone by milestone. It does not affect the product. Run it with `cd learning-hub && npm install && npm run dev`. See [learning-hub/README.md](learning-hub/README.md).
 
+## Cloudflare scheduler for the early beta
+
+For a small free beta, `cloudflare-scheduler/` provides a free five-minute Cron Trigger that securely calls the protected `/api/cron` endpoint. It is a serverless scheduler rather than a continuously running worker. Keep the database lease enabled, and disable the GitHub Actions schedule only after the Cloudflare trigger has been verified in production.
+
 ## Quick start
 
 ### Requirements
@@ -177,9 +181,9 @@ npm run build
 
 ## Deployment notes
 
-The repository includes Vercel configuration for the React frontend and Express API. Production uses Neon PostgreSQL. Until the dedicated worker is deployed and verified, the GitHub Actions scheduler calls `GET /api/cron` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
+The repository includes Vercel configuration for the React frontend and Express API. Production uses Neon PostgreSQL. The early beta uses the free Cloudflare Cron Trigger in `cloudflare-scheduler/` to call `GET /api/cron` every five minutes with `Authorization: Bearer <CRON_SECRET>`.
 
-After the dedicated worker has been healthy for at least one day, disable the GitHub scheduler to avoid unnecessary fallback runs. Keep the protected `/api/cron` endpoint for emergency manual runs.
+The GitHub Actions workflow remains available through `workflow_dispatch` as an emergency manual trigger. It has no automatic schedule, which prevents duplicate scheduler calls.
 
 This MVP scheduler is designed for one worker. Before running multiple workers, add a distributed queue or database claim/lease so two workers cannot execute the same monitor simultaneously.
 
