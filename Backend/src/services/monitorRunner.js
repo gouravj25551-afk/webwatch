@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const { checkWebsite } = require('./websiteChecker');
-const { sendAlert } = require('./emailService');
+const { buildAlertPayload } = require('./emailService');
+const { deliverNotification, notificationData } = require('./notificationService');
 
 const runningMonitorIds = new Set();
 
@@ -35,7 +36,7 @@ async function runMonitor(monitorId) {
 
     const alertRecipient = monitor.user.email;
     const result = await checkWebsite(monitor.url, { attempts: 3, timeoutMs: 5_000 });
-    let alert = null;
+    let notificationId = null;
 
     await prisma.$transaction(async (tx) => {
       await tx.check.create({
@@ -60,7 +61,13 @@ async function runMonitor(monitorId) {
             where: { id: incident.id },
             data: { resolvedAt: new Date() },
           });
-          alert = { type: 'recovery', incident: resolvedIncident };
+          const payload = buildAlertPayload({
+            type: 'recovery', monitor, result, incident: resolvedIncident, recipient: alertRecipient,
+          });
+          const notification = await tx.notification.create({
+            data: notificationData({ incidentId: resolvedIncident.id, type: 'recovery', payload }),
+          });
+          notificationId = notification.id;
         }
 
         await tx.monitor.update({
@@ -88,7 +95,13 @@ async function runMonitor(monitorId) {
               startReason: result.error || `HTTP status ${result.statusCode}`,
             },
           });
-          alert = { type: 'down', incident };
+          const payload = buildAlertPayload({
+            type: 'down', monitor, result, incident, recipient: alertRecipient,
+          });
+          const notification = await tx.notification.create({
+            data: notificationData({ incidentId: incident.id, type: 'down', payload }),
+          });
+          notificationId = notification.id;
         }
 
         await tx.monitor.update({
@@ -106,17 +119,11 @@ async function runMonitor(monitorId) {
       }
     });
 
-    if (alert) {
+    if (notificationId) {
       try {
-        await sendAlert({
-          type: alert.type,
-          monitor,
-          result,
-          incident: alert.incident,
-          recipient: alertRecipient,
-        });
+        await deliverNotification(notificationId);
       } catch (error) {
-        console.error(`Alert delivery failed for monitor ${monitor.id}:`, error.message);
+        console.error(`Alert delivery queued for retry for monitor ${monitor.id}:`, error.message);
       }
     }
 

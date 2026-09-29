@@ -59,15 +59,21 @@ function buildAlertPayload({ type, monitor, result, incident, recipient }) {
 async function sendAlert({ type, monitor, result, incident, recipient }) {
   const payload = buildAlertPayload({ type, monitor, result, incident, recipient });
 
+  return sendEmailPayload(payload);
+}
+
+async function sendEmailPayload(payload, options = {}) {
   if (!resend) {
-    console.log(`[email preview] ${payload.subject} -> ${recipient}`);
+    console.log(`[email preview] ${payload.subject} -> ${payload.to}`);
     return { preview: true };
   }
 
-  const { data, error } = await resend.emails.send(payload);
+  const { data, error } = await resend.emails.send(payload, {
+    idempotencyKey: options.idempotencyKey,
+  });
 
   if (error) throw new Error(`Resend email failed: ${error.message}`);
   return data;
 }
 
-module.exports = { buildAlertPayload, emailTemplate, escapeHtml, sendAlert, singleLine };
+module.exports = { buildAlertPayload, emailTemplate, escapeHtml, sendAlert, sendEmailPayload, singleLine };

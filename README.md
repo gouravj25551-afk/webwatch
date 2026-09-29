@@ -12,7 +12,7 @@ WebWatch is a small uptime-monitoring platform. Users create an account, add a p
 - Automatic 5, 10, or 15-minute checks
 - Three attempts before declaring downtime
 - Downtime incidents and recovery detection
-- Resend email integration with local preview mode; production delivery requires a verified sender
+- Durable Resend alert delivery with database-backed retries, crash-safe leases, and local preview mode
 - Pause, resume, delete, and check-now actions
 - 7-day check history, incident history, response chart, and 30-day uptime percentage
 - API rate limiting and security headers
@@ -32,7 +32,7 @@ Express API (3001) ---- Prisma ---- PostgreSQL
         |
         +---- Monitor scheduler (database-backed due checks)
         +---- HTTP checker (timeout, redirects, SSRF guard, retries)
-        +---- Resend (downtime/recovery alerts)
+        +---- Notification outbox ---- Resend (downtime/recovery alerts)
 ```
 
 PostgreSQL is the source of truth. When the backend restarts, its scheduler scans the database and runs monitors whose next check is due.
@@ -103,6 +103,8 @@ Without a `RESEND_API_KEY`, alerts run in preview mode and are printed in the ba
 
 During the beta, alerts are sent only to the monitor owner's WebWatch account email. Supporting additional recipients requires a separate email-verification flow.
 
+Downtime and recovery messages are saved to the PostgreSQL notification outbox in the same transaction as the incident change. WebWatch attempts delivery immediately and retries temporary failures with exponential backoff. A delivery lease prevents multiple workers from sending the same notification concurrently, and a Resend idempotency key protects against duplicates if a process crashes after Resend accepts a message.
+
 For real email delivery:
 
 1. Create a Resend account and verify a sending domain that you own.
@@ -159,6 +161,7 @@ Never place the Resend key in the frontend.
 - **Monitor** — URL, alert destination, interval, and current state
 - **Check** — status code, response time, error, and retry count
 - **Incident** — downtime start and recovery time
+- **Notification** — durable alert payload, delivery attempts, retry time, and provider message ID
 - **Payment** — future Dodo checkout and monitor-slot purchase
 
 Deleting a user or monitor cascades to its related history.
@@ -187,7 +190,7 @@ The repository includes Vercel configuration for the React frontend and Express 
 
 The GitHub Actions workflow remains available through `workflow_dispatch` as an emergency manual trigger. It has no automatic schedule, which prevents duplicate scheduler calls.
 
-This MVP scheduler is designed for one worker. Before running multiple workers, add a distributed queue or database claim/lease so two workers cannot execute the same monitor simultaneously.
+Monitor checks and notification delivery both use PostgreSQL leases. This allows multiple scheduler calls or workers to overlap without intentionally processing the same work twice. Redis and BullMQ remain a future scaling option when the database queue becomes a measurable bottleneck.
 
 For public deployment:
 
