@@ -40,7 +40,7 @@ function statusLabel(status) {
   return { UP: 'Operational', DOWN: 'Down', PAUSED: 'Paused', UNKNOWN: 'Checking' }[status] || status
 }
 
-function AuthScreen({ onAuthenticated, apiOnline }) {
+function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
   const [mode, setMode] = useState('register')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -111,7 +111,7 @@ function AuthScreen({ onAuthenticated, apiOnline }) {
             {message && <p className="form-success">{message}</p>}
             <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Please wait…' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button>
           </form>
-          {mode === 'login' && <button className="auth-link" onClick={() => { setMode('forgot'); setError(''); setMessage('') }}>Forgot password?</button>}
+          {mode === 'login' && accountEmailsEnabled && <button className="auth-link" onClick={() => { setMode('forgot'); setError(''); setMessage('') }}>Forgot password?</button>}
           {mode === 'forgot' && <button className="auth-link" onClick={() => { setMode('login'); setError(''); setMessage('') }}>Back to login</button>}
           <p className="tiny">Free beta · Up to 10 monitors · No card required</p>
         </section>
@@ -546,6 +546,7 @@ function App() {
   const [user, setUser] = useState(null)
   const [booting, setBooting] = useState(true)
   const [apiOnline, setApiOnline] = useState(false)
+  const [capabilities, setCapabilities] = useState({ accountEmails: false })
   const [paymentToast, setPaymentToast] = useState(null)
   const [accountAction, setAccountAction] = useState(() => {
     const params = new URLSearchParams(window.location.search)
@@ -560,8 +561,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    Promise.allSettled([fetch('/api/health').then((response) => response.ok), api('/api/auth/me')]).then(([health, session]) => {
-      setApiOnline(health.status === 'fulfilled' && health.value)
+    Promise.allSettled([
+      fetch('/api/health').then(async (response) => ({ ok: response.ok, data: await response.json().catch(() => ({})) })),
+      api('/api/auth/me'),
+    ]).then(([health, session]) => {
+      setApiOnline(health.status === 'fulfilled' && health.value.ok)
+      if (health.status === 'fulfilled' && health.value.data.capabilities) setCapabilities(health.value.data.capabilities)
       if (session.status === 'fulfilled') setUser(session.value.user)
       setBooting(false)
     })
@@ -610,7 +615,7 @@ function App() {
           <button onClick={() => setPaymentToast(null)}>Dismiss</button>
         </div>
       )}
-      {user ? <Dashboard user={user} onLogout={logout} apiOnline={apiOnline} /> : <AuthScreen onAuthenticated={setUser} apiOnline={apiOnline} />}
+      {user ? <Dashboard user={user} onLogout={logout} apiOnline={apiOnline} /> : <AuthScreen onAuthenticated={setUser} apiOnline={apiOnline} accountEmailsEnabled={capabilities.accountEmails} />}
     </>
   )
 }
