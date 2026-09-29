@@ -125,6 +125,10 @@ Never place the Resend key in the frontend.
 | `COOKIE_NAME` | Session-cookie name | `webwatch_token` |
 | `CHECK_INTERVAL_MS` | How often the scheduler scans for due work | `30000` |
 | `MAX_MONITORS_PER_USER` | Beta account limit | `10` |
+| `SCHEDULER_CONCURRENCY` | Maximum monitor checks running in one scheduler invocation | `10` |
+| `CHECK_RETENTION_DAYS` | Detailed check history retention | `30` |
+| `NOTIFICATION_RETENTION_DAYS` | Alert delivery record retention | `90` |
+| `INCIDENT_RETENTION_DAYS` | Resolved incident retention | `365` |
 | `RESEND_API_KEY` | Enables real email delivery | Empty/preview mode |
 | `ALERT_FROM` | Resend sender identity | Resend onboarding sender |
 | `ACCOUNT_EMAILS_ENABLED` | Enables verification and password-reset email sending | `false` |
@@ -141,6 +145,7 @@ Never place the Resend key in the frontend.
 ### Public
 
 - `GET /health` — API health
+- `GET /api/health/ready` — database and scheduler-heartbeat readiness
 - `POST /api/check` — one manual public-URL check
 - `POST /api/auth/register` — create an account
 - `POST /api/auth/login` — start a session
@@ -197,6 +202,17 @@ The repository includes Vercel configuration for the React frontend and Express 
 The GitHub Actions workflow remains available through `workflow_dispatch` as an emergency manual trigger. It has no automatic schedule, which prevents duplicate scheduler calls.
 
 Monitor checks and notification delivery both use PostgreSQL leases. This allows multiple scheduler calls or workers to overlap without intentionally processing the same work twice. Redis and BullMQ remain a future scaling option when the database queue becomes a measurable bottleneck.
+
+The scheduler uses bounded concurrency so a large due batch cannot open an unbounded number of network and database operations. Once per day, the same protected scheduler invocation claims a database maintenance lease and removes old data in batches:
+
+- detailed checks after 30 days
+- notification delivery records after 90 days
+- resolved incidents after 365 days
+- used or expired account tokens after 7 days
+
+Retention values are configurable. Active incidents, users, monitors, and payment records are not removed by this maintenance job.
+
+Every successful scheduler cycle writes a database heartbeat and a structured JSON log. The readiness endpoint returns `503` when PostgreSQL is unavailable or when no scheduler cycle has completed for 15 minutes. Point an independent uptime monitor at `/api/health/ready` so WebWatch failures are visible even when the dashboard is unattended.
 
 For public deployment:
 

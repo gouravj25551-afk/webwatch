@@ -106,6 +106,7 @@ model Check {
   checkedAt      DateTime @default(now())
 
   @@index([monitorId, checkedAt])
+  @@index([checkedAt])
 }
 
 model Incident {
@@ -119,6 +120,7 @@ model Incident {
 
   @@index([monitorId, startedAt])
   @@index([monitorId, resolvedAt])
+  @@index([resolvedAt])
 }
 
 model Notification {
@@ -143,4 +145,12 @@ model Notification {
   @@unique([incidentId, type])
   @@index([status, nextAttemptAt])
   @@index([deliveryLeaseUntil])
+  @@index([createdAt])
+}
+
+model MaintenanceJob {
+  id         String    @id
+  lastRunAt  DateTime?
+  leaseUntil DateTime?
+  updatedAt  DateTime  @updatedAt
 }

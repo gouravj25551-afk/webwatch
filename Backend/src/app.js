@@ -11,6 +11,7 @@ const webhookRoutes = require('./routes/webhooks');
 const { checkWebsite } = require('./services/websiteChecker');
 const { runDueMonitors } = require('./services/scheduler');
 const errorHandler = require('./middleware/errorHandler');
+const { getReadiness } = require('./services/systemHealthService');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -40,6 +41,15 @@ function healthResponse(req, res) {
 
 app.get('/health', healthResponse);
 app.get('/api/health', healthResponse);
+app.get('/api/health/ready', async (req, res) => {
+  try {
+    const readiness = await getReadiness();
+    return res.status(readiness.ready ? 200 : 503).json({ success: readiness.ready, ...readiness });
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'readiness_check_failed', message: error.message }));
+    return res.status(503).json({ success: false, ready: false, database: 'error', scheduler: 'unknown' });
+  }
+});
 
 app.post('/api/check', async (req, res, next) => {
   try {

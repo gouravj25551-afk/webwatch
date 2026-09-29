@@ -23,6 +23,10 @@ const config = {
   billingEnabled: process.env.BILLING_ENABLED === 'true',
   requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
   accountEmailsEnabled: process.env.ACCOUNT_EMAILS_ENABLED === 'true',
+  schedulerConcurrency: numberFromEnv('SCHEDULER_CONCURRENCY', 10),
+  checkRetentionDays: numberFromEnv('CHECK_RETENTION_DAYS', 30),
+  notificationRetentionDays: numberFromEnv('NOTIFICATION_RETENTION_DAYS', 90),
+  incidentRetentionDays: numberFromEnv('INCIDENT_RETENTION_DAYS', 365),
 };
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) {
