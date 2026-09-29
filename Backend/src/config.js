@@ -21,6 +21,8 @@ const config = {
   dodoMode: process.env.DODO_PAYMENTS_MODE || 'test_mode',
   dodoProductId: process.env.DODO_PAYMENTS_PRODUCT_ID || '',
   billingEnabled: process.env.BILLING_ENABLED === 'true',
+  requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+  accountEmailsEnabled: process.env.ACCOUNT_EMAILS_ENABLED === 'true',
 };
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) {
@@ -29,6 +31,10 @@ if (!config.jwtSecret || config.jwtSecret.length < 32) {
 
 if (config.billingEnabled && (!config.dodoApiKey || !config.dodoWebhookKey || !config.dodoProductId)) {
   throw new Error('Dodo API key, webhook key, and product ID are required when billing is enabled.');
+}
+
+if (config.requireEmailVerification && !config.accountEmailsEnabled) {
+  throw new Error('ACCOUNT_EMAILS_ENABLED must be true when email verification is required.');
 }
 
 module.exports = config;

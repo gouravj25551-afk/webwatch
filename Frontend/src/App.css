@@ -40,6 +40,10 @@ label small { color:#8d9993; font-weight:500; }
 input,select { width:100%; height:46px; padding:0 13px; color:var(--ink); background:#fbfcfb; border:1px solid #ccd9d2; border-radius:9px; outline:0; }
 input:focus,select:focus { border-color:var(--green); box-shadow:0 0 0 4px rgba(13,159,110,.09); }
 .form-error,.page-error { padding:11px 13px; margin:0; color:#8a3030; background:var(--red-soft); border:1px solid #f1cecb; border-radius:8px; font-size:12px; }
+.form-success { padding:11px 13px; margin:0; color:var(--green-dark); background:var(--green-soft); border:1px solid #c7eadb; border-radius:8px; font-size:12px; }
+.auth-link { margin:14px auto 0; display:block; padding:0; color:var(--green-dark); background:none; border:0; font-size:12px; font-weight:700; }
+.account-action-layout { min-height:calc(100vh - 74px); padding:60px 20px; display:grid; place-items:start center; }
+.account-action-card { width:min(460px,100%); }
 .tiny { margin:17px 0 0; color:#8c9992; font-size:11px; text-align:center; }
 
 /* Dashboard */

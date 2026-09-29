@@ -20,15 +20,37 @@ enum NotificationStatus {
   FAILED
 }
 
+enum AuthTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 model User {
   id                String    @id @default(uuid())
   email             String    @unique
   passwordHash      String
+  emailVerifiedAt   DateTime?
+  sessionVersion    Int       @default(0)
   paidMonitorsCount Int       @default(0)
   monitors          Monitor[]
   payments          Payment[]
+  authTokens        AuthToken[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+model AuthToken {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+  @@index([expiresAt])
 }
 
 model Payment {

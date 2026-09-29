@@ -127,6 +127,8 @@ Never place the Resend key in the frontend.
 | `MAX_MONITORS_PER_USER` | Beta account limit | `10` |
 | `RESEND_API_KEY` | Enables real email delivery | Empty/preview mode |
 | `ALERT_FROM` | Resend sender identity | Resend onboarding sender |
+| `ACCOUNT_EMAILS_ENABLED` | Enables verification and password-reset email sending | `false` |
+| `REQUIRE_EMAIL_VERIFICATION` | Blocks login until the account email is verified | `false` |
 | `CRON_SECRET` | Protects the production scheduler endpoint | Required for `/api/cron` |
 | `BILLING_ENABLED` | Enables paid monitor slots | `false` |
 | `DODO_PAYMENTS_API_KEY` | Creates Dodo checkout sessions | Required when billing is enabled |
@@ -143,6 +145,10 @@ Never place the Resend key in the frontend.
 - `POST /api/auth/register` — create an account
 - `POST /api/auth/login` — start a session
 - `POST /api/auth/logout` — clear the session
+- `POST /api/auth/verify-email` — consume a one-time verification token
+- `POST /api/auth/resend-verification` — request another verification email
+- `POST /api/auth/forgot-password` — request a password-reset email without revealing account existence
+- `POST /api/auth/reset-password` — consume a one-time reset token and invalidate older sessions
 - `GET /api/auth/me` — return the signed-in user
 - `POST /api/webhooks/dodo` — receive verified Dodo payment events
 
@@ -200,6 +206,7 @@ For public deployment:
 - Set the exact production `CLIENT_ORIGIN`.
 - Add network-level egress rules alongside application SSRF checks.
 - Configure a verified Resend domain.
+- After the domain is verified, set `ACCOUNT_EMAILS_ENABLED=true`; then set `REQUIRE_EMAIL_VERIFICATION=true`.
 - Add `DATABASE_URL`, `JWT_SECRET`, `CLIENT_ORIGIN`, `COOKIE_NAME`, `CRON_SECRET`, and optional Resend variables to Vercel.
 - Run `npx prisma migrate deploy --schema Backend/prisma/schema.prisma` against the production database.
 - Add centralized logs and an external monitor for WebWatch itself.
