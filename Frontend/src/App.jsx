@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 async function api(path, options = {}) {
@@ -46,17 +46,32 @@ function AuthScreen({ onAuthenticated, apiOnline }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
 
   async function submit(event) {
     event.preventDefault()
     setError('')
+    setMessage('')
     setLoading(true)
     try {
+      if (mode === 'forgot') {
+        const data = await api('/api/auth/forgot-password', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        })
+        setMessage(data.message)
+        return
+      }
       const data = await api(`/api/auth/${mode}`, {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       })
-      onAuthenticated(data.user)
+      if (data.verificationRequired) {
+        setMessage(data.message)
+        setMode('login')
+      } else {
+        onAuthenticated(data.user)
+      }
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -87,18 +102,87 @@ function AuthScreen({ onAuthenticated, apiOnline }) {
             <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>Create account</button>
             <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Log in</button>
           </div>
-          <h2>{mode === 'register' ? 'Start site monitoring' : 'Welcome back'}</h2>
-          <p className="subtle">{mode === 'register' ? 'Create an account to manage your site monitors.' : 'Log in to see your monitors.'}</p>
+          <h2>{mode === 'register' ? 'Start site monitoring' : mode === 'forgot' ? 'Reset your password' : 'Welcome back'}</h2>
+          <p className="subtle">{mode === 'register' ? 'Create an account to manage your site monitors.' : mode === 'forgot' ? 'We will email you a secure reset link.' : 'Log in to see your monitors.'}</p>
           <form onSubmit={submit}>
             <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required /></label>
-            <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" minLength="8" required /></label>
+            {mode !== 'forgot' && <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" minLength="8" maxLength="72" required /></label>}
             {error && <p className="form-error">{error}</p>}
-            <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Please wait…' : mode === 'register' ? 'Create account' : 'Log in'}</button>
+            {message && <p className="form-success">{message}</p>}
+            <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Please wait…' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button>
           </form>
+          {mode === 'login' && <button className="auth-link" onClick={() => { setMode('forgot'); setError(''); setMessage('') }}>Forgot password?</button>}
+          {mode === 'forgot' && <button className="auth-link" onClick={() => { setMode('login'); setError(''); setMessage('') }}>Back to login</button>}
           <p className="tiny">Free beta · Up to 10 monitors · No card required</p>
         </section>
       </main>
       <footer className="legal-links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Beta terms</a><a href="https://github.com/gouravj25551-afk/webwatch" target="_blank" rel="noreferrer">GitHub</a></footer>
+    </div>
+  )
+}
+
+function AccountAction({ type, token, apiOnline, onAuthenticated, onDone }) {
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(type === 'verify')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (type !== 'verify') return
+    api('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
+      .then((data) => {
+        setMessage(data.message)
+        onAuthenticated(data.user)
+        window.history.replaceState({}, document.title, window.location.pathname)
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false))
+  }, [type, token, onAuthenticated])
+
+  async function resetPassword(event) {
+    event.preventDefault()
+    setError('')
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    setLoading(true)
+    try {
+      const data = await api('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, password }),
+      })
+      setMessage(data.message)
+      onAuthenticated(data.user)
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="auth-page">
+      <header className="landing-nav"><div className="brand"><span className="brand-mark"><PulseIcon /></span><span>WebWatch</span></div><span className={`api-pill ${apiOnline ? 'online' : 'offline'}`}><i />{apiOnline ? 'API online' : 'API offline'}</span></header>
+      <main className="account-action-layout">
+        <section className="auth-card account-action-card">
+          <span className="eyebrow">Account security</span>
+          <h2>{type === 'verify' ? 'Verifying your email' : 'Choose a new password'}</h2>
+          {type === 'verify' && loading && <p className="subtle">Checking your secure link…</p>}
+          {type === 'reset' && !message && (
+            <form onSubmit={resetPassword}>
+              <label>New password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" maxLength="72" required /></label>
+              <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" maxLength="72" required /></label>
+              <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Updating…' : 'Update password'}</button>
+            </form>
+          )}
+          {error && <p className="form-error">{error}</p>}
+          {message && <p className="form-success">{message} Opening your dashboard…</p>}
+          {error && <button className="auth-link" onClick={onDone}>Back to login</button>}
+        </section>
+      </main>
     </div>
   )
 }
@@ -463,6 +547,17 @@ function App() {
   const [booting, setBooting] = useState(true)
   const [apiOnline, setApiOnline] = useState(false)
   const [paymentToast, setPaymentToast] = useState(null)
+  const [accountAction, setAccountAction] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('verify')) return { type: 'verify', token: params.get('verify') }
+    if (params.get('reset')) return { type: 'reset', token: params.get('reset') }
+    return null
+  })
+
+  const completeAccountAction = useCallback((authenticatedUser) => {
+    setUser(authenticatedUser)
+    setAccountAction(null)
+  }, [])
 
   useEffect(() => {
     Promise.allSettled([fetch('/api/health').then((response) => response.ok), api('/api/auth/me')]).then(([health, session]) => {
@@ -502,6 +597,10 @@ function App() {
   }
 
   if (booting) return <div className="boot-screen"><span className="brand-mark"><PulseIcon /></span><p>Starting WebWatch SaaS…</p></div>
+
+  if (accountAction) {
+    return <AccountAction {...accountAction} apiOnline={apiOnline} onAuthenticated={completeAccountAction} onDone={() => { setAccountAction(null); window.history.replaceState({}, document.title, window.location.pathname) }} />
+  }
 
   return (
     <>

@@ -33,6 +33,22 @@ function emailTemplate({ title, monitor, message, accent }) {
     </div>`;
 }
 
+function accountEmailTemplate({ title, message, actionLabel, actionUrl }) {
+  const safeUrl = escapeHtml(actionUrl);
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#102019">
+      <div style="padding:20px 24px;background:#102019;color:white;border-radius:12px 12px 0 0">
+        <strong>WebWatch</strong>
+      </div>
+      <div style="padding:28px 24px;border:1px solid #dce6e0;border-top:0;border-radius:0 0 12px 12px">
+        <h1 style="font-size:22px;margin:0 0 12px">${escapeHtml(title)}</h1>
+        <p style="color:#607068;line-height:1.6">${escapeHtml(message)}</p>
+        <p style="margin:24px 0"><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#102019;color:white;text-decoration:none;border-radius:8px;font-weight:700">${escapeHtml(actionLabel)}</a></p>
+        <p style="color:#87938d;font-size:12px">If the button does not work, copy this URL:<br>${safeUrl}</p>
+      </div>
+    </div>`;
+}
+
 function buildAlertPayload({ type, monitor, result, incident, recipient }) {
   const isRecovery = type === 'recovery';
   const monitorName = singleLine(monitor.name) || 'Website';
@@ -76,4 +92,4 @@ async function sendEmailPayload(payload, options = {}) {
   return data;
 }
 
-module.exports = { buildAlertPayload, emailTemplate, escapeHtml, sendAlert, sendEmailPayload, singleLine };
+module.exports = { accountEmailTemplate, buildAlertPayload, emailTemplate, escapeHtml, sendAlert, sendEmailPayload, singleLine };
