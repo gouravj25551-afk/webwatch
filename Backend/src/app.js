@@ -30,13 +30,16 @@ app.use(rateLimit({
   message: { success: false, message: 'Too many requests. Try again later.' },
 }));
 
-app.get('/health', (req, res) => {
-  res.json({ success: true, message: 'WebWatch API is healthy' });
-});
+function healthResponse(req, res) {
+  res.json({
+    success: true,
+    message: 'WebWatch API is healthy',
+    capabilities: { accountEmails: config.accountEmailsEnabled },
+  });
+}
 
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'WebWatch API is healthy' });
-});
+app.get('/health', healthResponse);
+app.get('/api/health', healthResponse);
 
 app.post('/api/check', async (req, res, next) => {
   try {
