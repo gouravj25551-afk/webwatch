@@ -188,6 +188,18 @@ router.get('/:id/history', async (req, res, next) => {
         where: { monitorId: monitor.id, startedAt: { gte: since } },
         orderBy: { startedAt: 'desc' },
         take: 100,
+        include: {
+          notifications: {
+            select: {
+              id: true,
+              type: true,
+              status: true,
+              attempts: true,
+              sentAt: true,
+              lastError: true,
+            },
+          },
+        },
       }),
     ]);
 

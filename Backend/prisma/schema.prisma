@@ -14,6 +14,12 @@ enum MonitorStatus {
   PAUSED
 }
 
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                String    @id @default(uuid())
   email             String    @unique
@@ -81,13 +87,38 @@ model Check {
 }
 
 model Incident {
-  id          String    @id @default(uuid())
-  monitorId   String
-  monitor     Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-  startedAt   DateTime  @default(now())
-  resolvedAt  DateTime?
-  startReason String?
+  id            String         @id @default(uuid())
+  monitorId     String
+  monitor       Monitor        @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  startedAt     DateTime       @default(now())
+  resolvedAt    DateTime?
+  startReason   String?
+  notifications Notification[]
 
   @@index([monitorId, startedAt])
   @@index([monitorId, resolvedAt])
+}
+
+model Notification {
+  id                 String             @id @default(uuid())
+  incidentId         String
+  incident           Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  type               String
+  recipient          String
+  sender             String
+  subject            String
+  html               String
+  status             NotificationStatus @default(PENDING)
+  attempts           Int                @default(0)
+  nextAttemptAt      DateTime           @default(now())
+  deliveryLeaseUntil DateTime?
+  lastError          String?
+  providerMessageId  String?
+  sentAt             DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([incidentId, type])
+  @@index([status, nextAttemptAt])
+  @@index([deliveryLeaseUntil])
 }

@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const config = require('../config');
 const { runMonitor } = require('./monitorRunner');
+const { processPendingNotifications } = require('./notificationService');
 
 let schedulerTimer;
 let schedulerBusy = false;
@@ -22,6 +23,7 @@ async function runDueMonitors() {
     });
 
     await Promise.allSettled(due.map((monitor) => runMonitor(monitor.id)));
+    await processPendingNotifications();
   } catch (error) {
     console.error('Scheduler cycle failed:', error);
   } finally {
