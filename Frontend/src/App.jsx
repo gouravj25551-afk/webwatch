@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
+function cookieValue(name) {
+  return document.cookie.split('; ').find((value) => value.startsWith(`${name}=`))?.slice(name.length + 1) || ''
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     credentials: 'include',
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(!['GET', 'HEAD'].includes(options.method || 'GET') ? { 'X-CSRF-Token': cookieValue('webwatch_csrf') } : {}),
       ...options.headers,
     },
   })
@@ -87,15 +92,19 @@ function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
       </header>
       <main className="auth-layout">
         <section className="auth-copy">
-          <span className="eyebrow">Website uptime monitoring · Free beta</span>
-          <h1>Know when your website goes down.</h1>
-          <p>WebWatch checks your website automatically and records response times, downtime, and recovery.</p>
+          <span className="eyebrow">Always-on website monitoring</span>
+          <h1>Keep every important website <em>within reach.</em></h1>
+          <p>WebWatch quietly checks your websites around the clock, then alerts you the moment something needs your attention.</p>
           <ul>
-            <li><b>5 minute</b> automatic checks</li>
-            <li><b>3 attempts</b> before declaring downtime</li>
-            <li><b>Incident history</b> for downtime and recovery</li>
-            <li><b>Free beta</b> while we prepare paid plans</li>
+            <li><b>5 min</b> checks</li>
+            <li><b>Instant</b> email alerts</li>
+            <li><b>$1</b> per site / month</li>
           </ul>
+          <div className="landing-signal" aria-label="Example operational website status">
+            <div className="signal-top"><span><i /> All systems operational</span><small>LIVE</small></div>
+            <div className="signal-site"><span className="site-mark">W</span><div><b>yourwebsite.com</b><small>Checked just now</small></div><strong>99.98%</strong></div>
+            <div className="signal-bars">{Array.from({ length: 18 }).map((_, index) => <i key={index} style={{ height: `${28 + ((index * 17) % 52)}%` }} />)}</div>
+          </div>
         </section>
         <section className="auth-card">
           <div className="auth-tabs">
@@ -106,17 +115,17 @@ function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
           <p className="subtle">{mode === 'register' ? 'Create an account to manage your site monitors.' : mode === 'forgot' ? 'We will email you a secure reset link.' : 'Log in to see your monitors.'}</p>
           <form onSubmit={submit}>
             <label>Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required /></label>
-            {mode !== 'forgot' && <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" minLength="8" maxLength="72" required /></label>}
+            {mode !== 'forgot' && <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 10 characters" minLength="10" maxLength="72" required /></label>}
             {error && <p className="form-error">{error}</p>}
             {message && <p className="form-success">{message}</p>}
             <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Please wait…' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Log in'}</button>
           </form>
           {mode === 'login' && accountEmailsEnabled && <button className="auth-link" onClick={() => { setMode('forgot'); setError(''); setMessage('') }}>Forgot password?</button>}
           {mode === 'forgot' && <button className="auth-link" onClick={() => { setMode('login'); setError(''); setMessage('') }}>Back to login</button>}
-          <p className="tiny">Free beta · Up to 10 monitors · No card required</p>
+          <p className="tiny">Start with the exact number of website slots you need.</p>
         </section>
       </main>
-      <footer className="legal-links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Beta terms</a><a href="https://github.com/gouravj25551-afk/webwatch" target="_blank" rel="noreferrer">GitHub</a></footer>
+      <footer className="legal-links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Service terms</a><a href="https://github.com/gouravj25551-afk/webwatch" target="_blank" rel="noreferrer">GitHub</a></footer>
     </div>
   )
 }
@@ -124,16 +133,16 @@ function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
 function AccountAction({ type, token, apiOnline, onAuthenticated, onDone }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(type === 'verify')
+  const [loading, setLoading] = useState(type === 'verify' || type === 'alertVerify')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    if (type !== 'verify') return
-    api('/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
+    if (type !== 'verify' && type !== 'alertVerify') return
+    api(type === 'alertVerify' ? '/api/monitors/verify-alert-email' : '/api/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
       .then((data) => {
         setMessage(data.message)
-        onAuthenticated(data.user)
+        if (data.user) onAuthenticated(data.user)
         window.history.replaceState({}, document.title, window.location.pathname)
       })
       .catch((requestError) => setError(requestError.message))
@@ -169,17 +178,17 @@ function AccountAction({ type, token, apiOnline, onAuthenticated, onDone }) {
       <main className="account-action-layout">
         <section className="auth-card account-action-card">
           <span className="eyebrow">Account security</span>
-          <h2>{type === 'verify' ? 'Verifying your email' : 'Choose a new password'}</h2>
-          {type === 'verify' && loading && <p className="subtle">Checking your secure link…</p>}
+          <h2>{type === 'verify' ? 'Verifying your email' : type === 'alertVerify' ? 'Confirming alert email' : 'Choose a new password'}</h2>
+          {(type === 'verify' || type === 'alertVerify') && loading && <p className="subtle">Checking your secure link…</p>}
           {type === 'reset' && !message && (
             <form onSubmit={resetPassword}>
-              <label>New password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="8" maxLength="72" required /></label>
-              <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="8" maxLength="72" required /></label>
+              <label>New password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="10" maxLength="72" required /></label>
+              <label>Confirm password<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength="10" maxLength="72" required /></label>
               <button className="primary wide" disabled={loading || !apiOnline}>{loading ? 'Updating…' : 'Update password'}</button>
             </form>
           )}
           {error && <p className="form-error">{error}</p>}
-          {message && <p className="form-success">{message} Opening your dashboard…</p>}
+          {message && <p className="form-success">{message}{type === 'alertVerify' ? '' : ' Opening your dashboard…'}</p>}
           {error && <button className="auth-link" onClick={onDone}>Back to login</button>}
         </section>
       </main>
@@ -190,6 +199,7 @@ function AccountAction({ type, token, apiOnline, onAuthenticated, onDone }) {
 function DodoCheckoutModal({ open, onClose }) {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState('')
+  const [quantity, setQuantity] = useState(1)
 
   if (!open) return null
 
@@ -199,7 +209,7 @@ function DodoCheckoutModal({ open, onClose }) {
     try {
       const data = await api('/api/billing/create-checkout', {
         method: 'POST',
-        body: JSON.stringify({ quantity: 1 }),
+        body: JSON.stringify({ quantity }),
       })
 
       if (data.checkoutUrl) {
@@ -217,12 +227,19 @@ function DodoCheckoutModal({ open, onClose }) {
     <div className="modal-backdrop" role="presentation">
       <section className="modal checkout-modal" role="dialog" aria-modal="true">
         <button className="icon-button close" onClick={onClose} aria-label="Close">×</button>
-        <span className="eyebrow">Unlock Site Monitor</span>
-        <h2>Add 1 Site Slot</h2>
+        <span className="eyebrow">WebWatch monitoring plan</span>
+        <h2>Choose your website slots</h2>
+
+        <label>
+          Websites to monitor
+          <select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}>
+            {[1, 2, 3, 4, 5, 10].map((value) => <option key={value} value={value}>{value} website{value === 1 ? '' : 's'}</option>)}
+          </select>
+        </label>
 
         <div className="price-hero">
-          <div className="price-val">$1.00 <span>USD</span></div>
-          <p className="price-sub">One-time payment per site monitored</p>
+          <div className="price-val">${(quantity * 1).toFixed(2)} <span>USD / month</span></div>
+          <p className="price-sub">${quantity}/month for {quantity} website{quantity === 1 ? '' : 's'} · cancel anytime</p>
         </div>
 
         <ul className="checkout-features">
@@ -235,7 +252,7 @@ function DodoCheckoutModal({ open, onClose }) {
         {error && <p className="form-error">{error}</p>}
 
         <button className="buy-slot-btn wide" onClick={handleCheckout} disabled={checkoutLoading}>
-          {checkoutLoading ? 'Preparing Dodo Checkout…' : 'Pay $1.00 with ⚡ Dodo Payments'}
+          {checkoutLoading ? 'Preparing Dodo Checkout…' : `Continue to secure checkout · $${quantity}/month`}
         </button>
 
         <div className="dodo-badge">
@@ -249,7 +266,7 @@ function DodoCheckoutModal({ open, onClose }) {
 function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   const [open, setOpen] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
-  const [form, setForm] = useState({ name: '', url: '', intervalMinutes: 5 })
+  const [form, setForm] = useState({ name: '', url: '', alertEmail: user.email, alertOnDown: true, alertOnRecovery: true, intervalMinutes: 5 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -259,7 +276,7 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   function handleOpenClick() {
     if (availableSlots <= 0 && billingEnabled) {
       setShowPaywall(true)
-    } else if (availableSlots > 0) {
+    } else {
       setOpen(true)
     }
   }
@@ -272,7 +289,7 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
       const data = await api('/api/monitors', { method: 'POST', body: JSON.stringify(form) })
       onCreated(data.monitor)
       if (onRefreshBilling) onRefreshBilling()
-      setForm({ name: '', url: '', intervalMinutes: 5 })
+      setForm({ name: '', url: '', alertEmail: user.email, alertOnDown: true, alertOnRecovery: true, intervalMinutes: 5 })
       setOpen(false)
     } catch (requestError) {
       if (requestError.status === 402 || (requestError.data && requestError.data.requiresPayment)) {
@@ -291,10 +308,8 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         {availableSlots === 0 && billingEnabled ? (
           <button className="buy-slot-btn" onClick={() => setShowPaywall(true)}>
-            + Unlock Site Monitor ($1.00)
+            + Add a website slot ($1/month)
           </button>
-        ) : availableSlots === 0 ? (
-          <button className="secondary" disabled>Monitor limit reached</button>
         ) : (
           <button className="primary" onClick={handleOpenClick}>
             + Add monitor
@@ -324,7 +339,13 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
                 />
                 <small>https:// will be added automatically if you leave it out.</small>
               </label>
-              <label>Alert email <small>Alerts are sent to your WebWatch account email.</small><input type="email" value={user.email} readOnly /></label>
+              <label>Alert email <small>Use your account email or another address you control.</small><input type="email" value={form.alertEmail} onChange={(event) => setForm({ ...form, alertEmail: event.target.value })} required /></label>
+              <div className="alert-preferences">
+                <span>Send me:</span>
+                <label><input type="checkbox" checked={form.alertOnDown} onChange={(event) => setForm({ ...form, alertOnDown: event.target.checked })} /> Downtime alerts</label>
+                <label><input type="checkbox" checked={form.alertOnRecovery} onChange={(event) => setForm({ ...form, alertOnRecovery: event.target.checked })} /> Recovery alerts</label>
+              </div>
+              {form.alertEmail.trim().toLowerCase() !== user.email.toLowerCase() && <p className="subtle">We will send a confirmation link to this address. Monitoring starts after it is confirmed.</p>}
               <label>Check every<select value={form.intervalMinutes} onChange={(event) => setForm({ ...form, intervalMinutes: Number(event.target.value) })}><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
               {error && <p className="form-error">{error}</p>}
               <div className="modal-actions"><button type="button" className="secondary" onClick={() => setOpen(false)}>Cancel</button><button className="primary" disabled={loading}>{loading ? 'Creating and checking…' : 'Start monitoring'}</button></div>
@@ -336,7 +357,7 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   )
 }
 
-function MonitorCard({ monitor, busy, onCheck, onToggle, onDelete, onHistory }) {
+function MonitorCard({ monitor, busy, onCheck, onTestAlert, onToggle, onDelete, onHistory }) {
   return (
     <article className="monitor-card">
       <div className="monitor-head">
@@ -352,15 +373,70 @@ function MonitorCard({ monitor, busy, onCheck, onToggle, onDelete, onHistory }) 
       </div>
       {monitor.lastError && <p className="monitor-error">{monitor.lastError}</p>}
       <div className="monitor-footer">
-        <span>Every {monitor.intervalMinutes} min · Alerts to {monitor.alertEmail}</span>
+        <span>Every {monitor.intervalMinutes} min · Alerts to {monitor.alertEmail}{monitor.alertEmailVerified ? '' : ' (confirmation pending)'}</span>
         <div className="card-actions">
           <button className="text-button" onClick={() => onHistory(monitor)} disabled={busy}>History</button>
           <button className="text-button" onClick={() => onCheck(monitor.id)} disabled={busy || !monitor.enabled}>{busy ? 'Working…' : 'Check now'}</button>
+          <button className="text-button" onClick={() => onTestAlert(monitor.id)} disabled={busy || !monitor.alertEmailVerified}>{busy ? 'Working…' : 'Test alert'}</button>
           <button className="text-button" onClick={() => onToggle(monitor)} disabled={busy}>{monitor.enabled ? 'Pause' : 'Resume'}</button>
           <button className="text-button danger" onClick={() => onDelete(monitor)} disabled={busy}>Delete</button>
         </div>
       </div>
     </article>
+  )
+}
+
+function IntegrationsPanel() {
+  const [slack, setSlack] = useState(null)
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  const load = useCallback(async () => {
+    try {
+      const data = await api('/api/integrations')
+      setSlack(data.slack)
+      setError('')
+    } catch (requestError) { setError(requestError.message) } finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function save(event) {
+    event.preventDefault()
+    setSaving(true); setError(''); setMessage('')
+    try {
+      await api('/api/integrations/slack', { method: 'PUT', body: JSON.stringify({ webhookUrl }) })
+      setWebhookUrl('')
+      setMessage('Slack is connected. Use Test alert on any monitor to confirm delivery.')
+      await load()
+    } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
+  }
+
+  async function remove() {
+    if (!window.confirm('Disconnect Slack for your account?')) return
+    setSaving(true); setError(''); setMessage('')
+    try {
+      await api('/api/integrations/slack', { method: 'DELETE' })
+      setMessage('Slack has been disconnected.')
+      await load()
+    } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <section className="integrations-panel" id="integrations">
+      <div className="integration-heading"><div><span className="eyebrow">Your alert channels</span><h2>Integrations</h2><p>Connect your own Slack channel. Your webhook is encrypted before it is stored.</p></div>{slack?.configured && <span className="status-badge up">Slack connected</span>}</div>
+      {loading ? <p className="subtle">Loading integrations…</p> : slack?.configured ? <div className="integration-connected"><span>Slack alerts are on for your monitors.</span><button className="text-button danger" onClick={remove} disabled={saving}>{saving ? 'Working…' : 'Disconnect Slack'}</button></div> : (
+        <form className="integration-form" onSubmit={save}>
+          <label>Slack Incoming Webhook URL<input type="url" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.slack.com/services/..." required /></label>
+          <button className="primary" disabled={saving}>{saving ? 'Connecting…' : 'Connect Slack'}</button>
+        </form>
+      )}
+      {!slack?.configured && <p className="subtle">In Slack: create an Incoming Webhook, choose your alerts channel, then paste the URL here.</p>}
+      {error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}
+    </section>
   )
 }
 
@@ -406,6 +482,7 @@ function Dashboard({ user, onLogout, apiOnline }) {
   const [busyId, setBusyId] = useState('')
   const [historyMonitor, setHistoryMonitor] = useState(null)
   const [showBuyModal, setShowBuyModal] = useState(false)
+  const [notice, setNotice] = useState('')
 
   async function loadData(silent = false) {
     if (!silent) setLoading(true)
@@ -441,8 +518,9 @@ function Dashboard({ user, onLogout, apiOnline }) {
     setBusyId(id)
     setError('')
     try {
-      await request()
+      const data = await request()
       await loadData(true)
+      return data
     } catch (requestError) {
       setError(requestError.message)
     } finally {
@@ -466,11 +544,12 @@ function Dashboard({ user, onLogout, apiOnline }) {
         <nav>
           <a className="active" href="#monitors">Monitors <span>{monitors.length}</span></a>
           <a href="#incidents">Incidents <span>{stats.down}</span></a>
+          <a href="#integrations">Integrations</a>
         </nav>
 
         <div style={{ marginTop: '24px', padding: '0 8px' }}>
           <div className="slot-badge dark">
-            <span>{billingEnabled ? '⚡ Paid slots' : 'Beta slots'}: {monitors.length} / {monitorLimit}</span>
+            <span>{billingEnabled ? `⚡ Website slots: ${monitors.length} / ${monitorLimit}` : 'Unlimited monitors'}</span>
           </div>
         </div>
 
@@ -484,14 +563,12 @@ function Dashboard({ user, onLogout, apiOnline }) {
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div>
-            <span className="eyebrow">Monitoring dashboard</span>
-            <h1>Your monitors</h1>
-            <p>Automatic uptime checks, response history, and incident tracking.</p>
+            <span className="eyebrow">Monitoring workspace</span>
+            <h1>Website health, at a glance.</h1>
+            <p>Every monitor gets uptime checks, response history, and downtime alerts.</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="slot-badge">
-              {availableSlots > 0 ? `${availableSlots} slot(s) available` : '0 slots available'}
-            </span>
+            <span className="slot-badge">{billingEnabled ? (availableSlots > 0 ? `${availableSlots} website slot${availableSlots === 1 ? '' : 's'} ready` : '$1 / website / month') : 'Unlimited monitors'}</span>
             <AddMonitor
               user={user}
               billingSummary={billingSummary}
@@ -503,12 +580,15 @@ function Dashboard({ user, onLogout, apiOnline }) {
 
         <section className="stat-grid">
           <article><span>Total Monitors</span><strong>{monitors.length}</strong></article>
-          <article><span>Monitor Limit</span><strong className="green">{monitorLimit}</strong></article>
+          <article><span>{billingEnabled ? 'Website slots' : 'Plan'}</span><strong className="green">{billingEnabled ? monitorLimit : 'Unlimited'}</strong></article>
           <article><span>Operational</span><strong className="green">{stats.up}</strong></article>
           <article><span>Down</span><strong className="red">{stats.down}</strong></article>
         </section>
 
         {error && <p className="page-error">{error}</p>}
+        {notice && <p className="form-success page-notice">{notice}</p>}
+
+        <IntegrationsPanel />
 
         <section className="monitor-list" id="monitors">
           {loading && <div className="empty-state"><span className="spinner dark-spinner" /><h2>Loading monitors…</h2></div>}
@@ -517,13 +597,13 @@ function Dashboard({ user, onLogout, apiOnline }) {
             <div className="empty-state">
               <span className="empty-icon"><PulseIcon /></span>
               <h2>No monitors active yet</h2>
-              <p>{availableSlots > 0 ? 'Add a website to start monitoring during the free beta.' : 'Your monitor limit has been reached.'}</p>
+              <p>{billingEnabled ? (availableSlots > 0 ? 'Use one of your website slots to start monitoring.' : 'Buy a website slot to begin monitoring.') : 'Add a website or API to start monitoring.'}</p>
               <div style={{ marginTop: '16px' }}>
-                {availableSlots > 0 ? (
+                {!billingEnabled || availableSlots > 0 ? (
                   <AddMonitor user={user} billingSummary={billingSummary} onCreated={(monitor) => setMonitors((current) => [monitor, ...current])} onRefreshBilling={() => loadData(true)} />
                 ) : billingEnabled ? (
                   <button className="buy-slot-btn" onClick={() => setShowBuyModal(true)}>
-                    + Unlock Site Monitor Slot ($1.00)
+                    + Add a website slot ($1/month)
                   </button>
                 ) : null}
               </div>
@@ -531,7 +611,7 @@ function Dashboard({ user, onLogout, apiOnline }) {
           )}
 
           {monitors.map((monitor) => (
-            <MonitorCard key={monitor.id} monitor={monitor} busy={busyId === monitor.id} onHistory={setHistoryMonitor} onCheck={(id) => action(id, () => api(`/api/monitors/${id}/check`, { method: 'POST' }))} onToggle={(item) => action(item.id, () => api(`/api/monitors/${item.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !item.enabled }) }))} onDelete={deleteMonitor} />
+            <MonitorCard key={monitor.id} monitor={monitor} busy={busyId === monitor.id} onHistory={setHistoryMonitor} onCheck={(id) => action(id, () => api(`/api/monitors/${id}/check`, { method: 'POST' }))} onTestAlert={(id) => action(id, async () => { const data = await api(`/api/monitors/${id}/test-alert`, { method: 'POST' }); setNotice(data.message); return data })} onToggle={(item) => action(item.id, () => api(`/api/monitors/${item.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !item.enabled }) }))} onDelete={deleteMonitor} />
           ))}
         </section>
       </main>
@@ -552,6 +632,7 @@ function App() {
     const params = new URLSearchParams(window.location.search)
     if (params.get('verify')) return { type: 'verify', token: params.get('verify') }
     if (params.get('reset')) return { type: 'reset', token: params.get('reset') }
+    if (params.get('verify-alert')) return { type: 'alertVerify', token: params.get('verify-alert') }
     return null
   })
 
@@ -582,7 +663,7 @@ function App() {
       })
         .then((res) => {
           if (res.fulfilled) {
-            setPaymentToast('⚡ Payment of $1.00 successful! Your site monitor slot is unlocked.')
+            setPaymentToast('⚡ Payment successful! Your website slot is unlocked.')
           } else {
             setPaymentToast('Payment is processing. Your slot will appear after confirmation.')
           }
