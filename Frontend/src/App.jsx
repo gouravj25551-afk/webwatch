@@ -617,8 +617,8 @@ function Dashboard({ user, onLogout, apiOnline }) {
           {!loading && !monitors.length && (
             <div className="empty-state">
               <span className="empty-icon"><PulseIcon /></span>
-              <h2>No monitors active yet</h2>
-              <p>{billingEnabled ? (availableSlots > 0 ? 'Use one of your website slots to start monitoring.' : 'Buy a website slot to begin monitoring.') : 'Add a website or API to start monitoring.'}</p>
+              <h2>Nothing to watch yet</h2>
+              <p>{billingEnabled ? (availableSlots > 0 ? 'Add a website when you are ready.' : 'Buy a website slot to begin monitoring.') : 'Add a website or API when you are ready.'}</p>
               <div style={{ marginTop: '16px' }}>
                 {!billingEnabled || availableSlots > 0 ? (
                   <AddMonitor user={user} billingSummary={billingSummary} onCreated={(monitor) => setMonitors((current) => [monitor, ...current])} onRefreshBilling={() => loadData(true)} />
