@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 function cookieValue(name) {
@@ -32,6 +32,34 @@ function PulseIcon() {
       <path d="M3 17h6l3-9 6 17 4-12 2 4h5" />
     </svg>
   )
+}
+
+function ThemeRope({ theme, onToggle }) {
+  const startY = useRef(null)
+  const pullDistance = useRef(0)
+  const [pull, setPull] = useState(0)
+
+  function start(event) {
+    startY.current = event.clientY
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  function move(event) {
+    if (startY.current == null) return
+    pullDistance.current = Math.max(0, Math.min(72, event.clientY - startY.current))
+    setPull(pullDistance.current)
+  }
+  function end() {
+    if (pullDistance.current > 32) onToggle()
+    startY.current = null
+    pullDistance.current = 0
+    setPull(0)
+  }
+
+  return <div className="theme-rope" role="switch" aria-label={`Pull to switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} aria-checked={theme === 'dark'} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+    <span className="rope-line" style={{ height: `${54 + pull}px` }} />
+    <span className="rope-handle" style={{ transform: `translateY(${pull}px)` }}>{theme === 'dark' ? '☾' : '☀'}</span>
+    <small>pull</small>
+  </div>
 }
 
 function formatDate(value) {
@@ -98,7 +126,7 @@ function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
           <ul>
             <li><b>5 min</b> checks</li>
             <li><b>Instant</b> email alerts</li>
-            <li><b>$1</b> per site / month</li>
+            <li><b>Private</b> monitoring</li>
           </ul>
           <div className="landing-signal" aria-label="Example operational website status">
             <div className="signal-top"><span><i /> All systems operational</span><small>LIVE</small></div>
@@ -122,7 +150,7 @@ function AuthScreen({ onAuthenticated, apiOnline, accountEmailsEnabled }) {
           </form>
           {mode === 'login' && accountEmailsEnabled && <button className="auth-link" onClick={() => { setMode('forgot'); setError(''); setMessage('') }}>Forgot password?</button>}
           {mode === 'forgot' && <button className="auth-link" onClick={() => { setMode('login'); setError(''); setMessage('') }}>Back to login</button>}
-          <p className="tiny">Start with the exact number of website slots you need.</p>
+          <p className="tiny">Simple monitoring, without the noise.</p>
         </section>
       </main>
       <footer className="legal-links"><a href="/privacy.html">Privacy</a><a href="/terms.html">Service terms</a><a href="https://github.com/gouravj25551-afk/webwatch" target="_blank" rel="noreferrer">GitHub</a></footer>
@@ -534,7 +562,6 @@ function Dashboard({ user, onLogout, apiOnline }) {
   }
 
   const billingEnabled = billingSummary?.billingEnabled === true
-  const monitorLimit = billingSummary ? billingSummary.monitorLimit : 0
   const availableSlots = billingSummary ? billingSummary.availableSlots : 0
 
   return (
@@ -546,12 +573,6 @@ function Dashboard({ user, onLogout, apiOnline }) {
           <a href="#incidents">Incidents <span>{stats.down}</span></a>
           <a href="#integrations">Integrations</a>
         </nav>
-
-        <div style={{ marginTop: '24px', padding: '0 8px' }}>
-          <div className="slot-badge dark">
-            <span>{billingEnabled ? `⚡ Website slots: ${monitors.length} / ${monitorLimit}` : 'Unlimited monitors'}</span>
-          </div>
-        </div>
 
         <div className="sidebar-bottom">
           <span className={`api-pill dark ${apiOnline ? 'online' : 'offline'}`}><i />{apiOnline ? 'System online' : 'API offline'}</span>
@@ -568,7 +589,6 @@ function Dashboard({ user, onLogout, apiOnline }) {
             <p>Every monitor gets uptime checks, response history, and downtime alerts.</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="slot-badge">{billingEnabled ? (availableSlots > 0 ? `${availableSlots} website slot${availableSlots === 1 ? '' : 's'} ready` : '$1 / website / month') : 'Unlimited monitors'}</span>
             <AddMonitor
               user={user}
               billingSummary={billingSummary}
@@ -578,11 +598,10 @@ function Dashboard({ user, onLogout, apiOnline }) {
           </div>
         </header>
 
-        <section className="stat-grid">
-          <article><span>Total Monitors</span><strong>{monitors.length}</strong></article>
-          <article><span>{billingEnabled ? 'Website slots' : 'Plan'}</span><strong className="green">{billingEnabled ? monitorLimit : 'Unlimited'}</strong></article>
+        <section className="stat-grid stat-grid-simple">
+          <article><span>Websites</span><strong>{monitors.length}</strong></article>
           <article><span>Operational</span><strong className="green">{stats.up}</strong></article>
-          <article><span>Down</span><strong className="red">{stats.down}</strong></article>
+          <article><span>Needs attention</span><strong className="red">{stats.down}</strong></article>
         </section>
 
         {error && <p className="page-error">{error}</p>}
@@ -624,6 +643,7 @@ function Dashboard({ user, onLogout, apiOnline }) {
 
 function App() {
   const [user, setUser] = useState(null)
+  const [theme, setTheme] = useState(() => localStorage.getItem('webwatch-theme') || 'light')
   const [booting, setBooting] = useState(true)
   const [apiOnline, setApiOnline] = useState(false)
   const [capabilities, setCapabilities] = useState({ accountEmails: false })
@@ -640,6 +660,8 @@ function App() {
     setUser(authenticatedUser)
     setAccountAction(null)
   }, [])
+
+  useEffect(() => { localStorage.setItem('webwatch-theme', theme) }, [theme])
 
   useEffect(() => {
     Promise.allSettled([
@@ -682,14 +704,17 @@ function App() {
     setUser(null)
   }
 
-  if (booting) return <div className="boot-screen"><span className="brand-mark"><PulseIcon /></span><p>Starting WebWatch SaaS…</p></div>
+  const rope = <ThemeRope theme={theme} onToggle={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} />
+
+  if (booting) return <div className={`app-shell theme-${theme}`}>{rope}<div className="boot-screen"><span className="brand-mark"><PulseIcon /></span><p>Starting WebWatch…</p></div></div>
 
   if (accountAction) {
-    return <AccountAction {...accountAction} apiOnline={apiOnline} onAuthenticated={completeAccountAction} onDone={() => { setAccountAction(null); window.history.replaceState({}, document.title, window.location.pathname) }} />
+    return <div className={`app-shell theme-${theme}`}>{rope}<AccountAction {...accountAction} apiOnline={apiOnline} onAuthenticated={completeAccountAction} onDone={() => { setAccountAction(null); window.history.replaceState({}, document.title, window.location.pathname) }} /></div>
   }
 
   return (
-    <>
+    <div className={`app-shell theme-${theme}`}>
+      {rope}
       {paymentToast && (
         <div className="toast-banner">
           <p>{paymentToast}</p>
@@ -697,7 +722,7 @@ function App() {
         </div>
       )}
       {user ? <Dashboard user={user} onLogout={logout} apiOnline={apiOnline} /> : <AuthScreen onAuthenticated={setUser} apiOnline={apiOnline} accountEmailsEnabled={capabilities.accountEmails} />}
-    </>
+    </div>
   )
 }
 
