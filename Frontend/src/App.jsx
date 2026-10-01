@@ -55,9 +55,11 @@ function ThemeRope({ theme, onToggle }) {
     setPull(0)
   }
 
+  const ropeHeight = 58 + pull
+  const sway = 6 + Math.sin(pull / 9) * 5
   return <div className="theme-rope" role="switch" aria-label={`Pull to switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} aria-checked={theme === 'dark'} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
-    <span className="rope-line" style={{ height: `${54 + pull}px` }} />
-    <span className="rope-handle" style={{ transform: `translateY(${pull}px)` }}>{theme === 'dark' ? '☾' : '☀'}</span>
+    <svg className="rope-line" viewBox="0 0 48 100" preserveAspectRatio="none" style={{ height: `${ropeHeight}px` }} aria-hidden="true"><path d={`M24 0 C${24 + sway} 18 ${24 - sway} 34 24 50 C${24 + sway} 67 ${24 - sway} 84 24 100`} /></svg>
+    <span className="rope-handle" style={{ transform: `translate(${Math.sin(pull / 11) * 7}px, ${pull}px)` }}>{theme === 'dark' ? '☾' : '☀'}</span>
     <small>pull</small>
   </div>
 }
