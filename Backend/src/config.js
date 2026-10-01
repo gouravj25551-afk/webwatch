@@ -11,7 +11,6 @@ const config = {
   cookieName: process.env.COOKIE_NAME || 'webwatch_token',
   jwtSecret: process.env.JWT_SECRET,
   checkIntervalMs: numberFromEnv('CHECK_INTERVAL_MS', 30_000),
-  maxMonitorsPerUser: numberFromEnv('MAX_MONITORS_PER_USER', 10),
   resendApiKey: process.env.RESEND_API_KEY || '',
   alertFrom: process.env.ALERT_FROM || 'WebWatch <onboarding@resend.dev>',
   cronSecret: process.env.CRON_SECRET || '',

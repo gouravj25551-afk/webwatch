@@ -1,0 +1,24 @@
+{
+  "$schema": "../cloudflare-scheduler/node_modules/wrangler/config-schema.json",
+  "name": "webwatch",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "../Frontend/dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "observability": { "enabled": true },
+  "routes": [
+    { "pattern": "webwatch.site", "custom_domain": true }
+  ],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "webwatch", "database_id": "330a7d1e-edaf-41a5-bd78-2b16e1bc9524", "migrations_dir": "migrations" }
+  ],
+  "vars": {
+    "CLIENT_ORIGIN": "https://webwatch.site",
+    "ALERT_FROM": "WebWatch <alerts@notify.webwatch.site>",
+    "DODO_PAYMENTS_PRODUCT_ID": "pdt_ONohhznQzXLJ1FVrVtNPU",
+    "DODO_PAYMENTS_MODE": "live_mode",
+    "COOKIE_NAME": "webwatch_token",
+    "BILLING_ENABLED": "false"
+  }
+}

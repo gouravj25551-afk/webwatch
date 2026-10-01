@@ -6,7 +6,8 @@
   "workspaces": [
     "Frontend",
     "Backend",
-    "cloudflare-scheduler"
+    "cloudflare-scheduler",
+    "cloudflare-app"
   ],
   "scripts": {
     "build": "npm run build --workspace=webwatch-frontend",

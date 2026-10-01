@@ -68,13 +68,6 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    if (!config.billingEnabled && currentCount >= config.maxMonitorsPerUser) {
-      return res.status(403).json({
-        success: false,
-        message: `Free beta allows ${config.maxMonitorsPerUser} monitors`,
-      });
-    }
-
     const { parsedUrl } = await validatePublicUrl(req.body.url);
     const name = cleanMonitorName(req.body.name, parsedUrl.hostname);
     const intervalMinutes = Number(req.body.intervalMinutes || 5);

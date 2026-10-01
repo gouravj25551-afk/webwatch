@@ -27,8 +27,8 @@ router.get('/summary', async (req, res, next) => {
     ]);
 
     const paidSlots = user ? user.paidMonitorsCount : 0;
-    const monitorLimit = config.billingEnabled ? paidSlots : config.maxMonitorsPerUser;
-    const availableSlots = Math.max(0, monitorLimit - activeMonitorsCount);
+    const monitorLimit = config.billingEnabled ? paidSlots : null;
+    const availableSlots = config.billingEnabled ? Math.max(0, monitorLimit - activeMonitorsCount) : null;
 
     return res.json({
       success: true,

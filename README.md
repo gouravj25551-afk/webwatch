@@ -8,7 +8,7 @@ WebWatch is a small uptime-monitoring platform. Users create an account, add a p
 
 - Email/password accounts with an HTTP-only session cookie
 - PostgreSQL storage through Prisma
-- Up to 10 monitors per free beta account
+- $1/month per monitored website
 - Automatic 5, 10, or 15-minute checks
 - Three attempts before declaring downtime
 - Downtime incidents and recovery detection
@@ -19,7 +19,7 @@ WebWatch is a small uptime-monitoring platform. Users create an account, add a p
 - SSRF protection for local, private, and reserved destinations, including redirect validation and DNS address pinning
 - Responsive React dashboard
 
-The codebase includes a disabled Dodo Payments integration for a future $1-per-monitor plan. Free beta mode stays active until billing credentials are configured and `BILLING_ENABLED=true` is set.
+WebWatch uses Dodo Payments for $1-per-monitor monthly subscriptions. Billing is enabled only after the live Dodo product, API key, and webhook signing key have been configured.
 
 ## Architecture
 
@@ -57,6 +57,28 @@ The worker needs `DATABASE_URL`, `JWT_SECRET`, `CHECK_INTERVAL_MS`, `RESEND_API_
 ## Cloudflare scheduler for the early beta
 
 For a small free beta, `cloudflare-scheduler/` provides a free five-minute Cron Trigger that securely calls the protected `/api/cron` endpoint. It is a serverless scheduler rather than a continuously running worker. Keep the database lease enabled, and disable the GitHub Actions schedule only after the Cloudflare trigger has been verified in production.
+
+## Zero-monthly-cost Cloudflare deployment
+
+`cloudflare-app/` is the deployment target for the budget launch. It replaces Vercel, Render, Neon, and the separate scheduler with one Cloudflare Worker:
+
+- React static assets are served by Cloudflare Workers Assets.
+- The Worker serves `/api/*` and runs the five-minute scheduled monitor checks itself.
+- Cloudflare D1 stores accounts, monitors, checks, and incidents.
+- Resend remains optional for email alerts.
+
+The Worker free tier is appropriate only for a deliberately small beta. WebWatch does not impose a monitor cap, so check D1 writes and Worker CPU usage as adoption grows and move to a paid Cloudflare plan before free-tier limits become a constraint.
+
+### Deploy it
+
+1. Create a Cloudflare account and buy your domain. Add the domain as a Cloudflare zone (Cloudflare will show the nameservers to enter at the domain registrar).
+2. In a terminal, run `cd cloudflare-app && npm run build`.
+3. Create the database once: `npx wrangler d1 create webwatch`. Copy the returned `database_id` into `cloudflare-app/wrangler.jsonc`.
+4. Set `CLIENT_ORIGIN` in `wrangler.jsonc` to `https://your-domain.com`, then run `npx wrangler d1 migrations apply webwatch --remote`.
+5. Create the required session secret: `npx wrangler secret put JWT_SECRET`. Use a long random value. Optionally add `RESEND_API_KEY` and `ALERT_FROM` the same way after verifying your sending domain.
+6. Deploy with `npm run deploy` from `cloudflare-app/`. In Cloudflare Dashboard → Workers & Pages → `webwatch` → Settings → Domains & Routes, attach `your-domain.com`.
+
+For the paid launch, create a **live-mode $1/month monitor-slot product** in Dodo, then set `DODO_PAYMENTS_MODE=live_mode` and add the Dodo API key and webhook signing key as Cloudflare secrets. Verify checkout, the `payment.succeeded` webhook, and monitor-slot fulfilment on the custom domain before accepting customers. The existing Vercel/Express application remains in the repository as the fuller paid-scale path.
 
 ## Quick start
 
@@ -124,7 +146,6 @@ Never place the Resend key in the frontend.
 | `CLIENT_ORIGIN` | Allowed browser origin | `http://localhost:5173` |
 | `COOKIE_NAME` | Session-cookie name | `webwatch_token` |
 | `CHECK_INTERVAL_MS` | How often the scheduler scans for due work | `30000` |
-| `MAX_MONITORS_PER_USER` | Beta account limit | `10` |
 | `SCHEDULER_CONCURRENCY` | Maximum monitor checks running in one scheduler invocation | `10` |
 | `CHECK_RETENTION_DAYS` | Detailed check history retention | `30` |
 | `NOTIFICATION_RETENTION_DAYS` | Alert delivery record retention | `90` |

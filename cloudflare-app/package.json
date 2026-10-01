@@ -1,0 +1,17 @@
+{
+  "name": "webwatch-cloudflare-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build --workspace=webwatch-frontend",
+    "dev": "wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply webwatch --remote"
+  },
+  "dependencies": {
+    "dodopayments": "^2.51.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
