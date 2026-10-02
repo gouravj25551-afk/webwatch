@@ -300,10 +300,15 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const availableSlots = billingSummary ? billingSummary.availableSlots : 0
+  const availableSlots = billingSummary ? billingSummary.availableSlots : 1
   const billingEnabled = billingSummary?.billingEnabled === true
+  const freeLimitReached = !billingEnabled && availableSlots <= 0
 
   function handleOpenClick() {
+    if (freeLimitReached) {
+      setError('The free launch plan includes one website. The $1 plan with two websites and Slack alerts is coming soon.')
+      return
+    }
     if (availableSlots <= 0 && billingEnabled) {
       setShowPaywall(true)
     } else {
@@ -336,7 +341,9 @@ function AddMonitor({ user, billingSummary, onCreated, onRefreshBilling }) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {availableSlots === 0 && billingEnabled ? (
+        {freeLimitReached ? (
+          <button className="secondary" disabled>Free website limit reached</button>
+        ) : availableSlots === 0 && billingEnabled ? (
           <button className="buy-slot-btn" onClick={() => setShowPaywall(true)}>
             + Add a website slot ($1/month)
           </button>
@@ -416,7 +423,7 @@ function MonitorCard({ monitor, busy, onCheck, onTestAlert, onToggle, onDelete, 
   )
 }
 
-function IntegrationsPanel() {
+function IntegrationsPanel({ billingEnabled }) {
   const [slack, setSlack] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -453,11 +460,11 @@ function IntegrationsPanel() {
 
   return (
     <section className="integrations-panel" id="integrations">
-      <div className="integration-heading"><div><span className="eyebrow">Your alert channels</span><h2>Integrations</h2><p>Connect Slack, choose a channel, and WebWatch will deliver alerts there.</p></div>{slack?.configured && <span className="status-badge up">Slack connected</span>}</div>
-      {loading ? <p className="subtle">Loading integrations…</p> : slack?.configured ? <div className="integration-connected"><span>Slack alerts are on for your monitors.</span><button className="text-button danger" onClick={remove} disabled={saving}>{saving ? 'Working…' : 'Disconnect Slack'}</button></div> : (
+      <div className="integration-heading"><div><span className="eyebrow">Your alert channels</span><h2>Integrations</h2><p>{billingEnabled ? 'Connect Slack, choose a channel, and WebWatch will deliver alerts there.' : 'Email alerts are included in the free launch plan.'}</p></div>{billingEnabled && slack?.configured && <span className="status-badge up">Slack connected</span>}</div>
+      {!billingEnabled ? <div className="integration-connected"><span>Slack alerts and two monitored websites will be available in the upcoming $1/month plan.</span></div> : loading ? <p className="subtle">Loading integrations…</p> : slack?.configured ? <div className="integration-connected"><span>Slack alerts are on for your monitors.</span><button className="text-button danger" onClick={remove} disabled={saving}>{saving ? 'Working…' : 'Disconnect Slack'}</button></div> : (
         <div className="integration-form"><div><b>Slack</b><p>Authorize WebWatch, then select the channel that should receive your alerts.</p></div><button type="button" className="primary" onClick={connect} disabled={saving}>{saving ? 'Opening Slack…' : 'Connect Slack'}</button></div>
       )}
-      {!slack?.configured && <p className="subtle">No webhook URL to copy or share.</p>}
+      {billingEnabled && !slack?.configured && <p className="subtle">No webhook URL to copy or share.</p>}
       {error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}
     </section>
   )
@@ -602,7 +609,7 @@ function Dashboard({ user, onLogout, apiOnline }) {
         {error && <p className="page-error">{error}</p>}
         {notice && <p className="form-success page-notice">{notice}</p>}
 
-        <IntegrationsPanel />
+        <IntegrationsPanel billingEnabled={billingEnabled} />
 
         <section className="monitor-list" id="monitors">
           {loading && <div className="empty-state"><span className="spinner dark-spinner" /><h2>Loading monitors…</h2></div>}
@@ -611,7 +618,7 @@ function Dashboard({ user, onLogout, apiOnline }) {
             <div className="empty-state">
               <span className="empty-icon"><PulseIcon /></span>
               <h2>Nothing to watch yet</h2>
-              <p>{billingEnabled ? (availableSlots > 0 ? 'Add a website when you are ready.' : 'Buy a website slot to begin monitoring.') : 'Add a website or API when you are ready.'}</p>
+              <p>{billingEnabled ? (availableSlots > 0 ? 'Add a website when you are ready.' : 'Buy a website slot to begin monitoring.') : 'Your first website is free and includes email alerts.'}</p>
               <div style={{ marginTop: '16px' }}>
                 {!billingEnabled || availableSlots > 0 ? (
                   <AddMonitor user={user} billingSummary={billingSummary} onCreated={(monitor) => setMonitors((current) => [monitor, ...current])} onRefreshBilling={() => loadData(true)} />
