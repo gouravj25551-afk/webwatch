@@ -2,6 +2,7 @@ import DodoPayments from 'dodopayments';
 
 const encoder = new TextEncoder();
 const DAY = 86_400_000;
+const FREE_MONITOR_LIMIT = 1;
 // Cloudflare Workers supports PBKDF2 iteration counts up to 100,000.
 const PASSWORD_ITERATIONS = 100_000;
 
@@ -217,6 +218,9 @@ function validSlackWebhook(value) {
   } catch { return null; }
 }
 async function slackWebhooksForUser(env, userId) {
+  // Slack is deliberately held for the paid plan during the launch period.
+  // This check also prevents an old saved connection from receiving alerts.
+  if (env.BILLING_ENABLED !== 'true') return [];
   const hooks = env.SLACK_WEBHOOK_URL ? [env.SLACK_WEBHOOK_URL] : [];
   const integration = await env.DB.prepare('SELECT slack_webhook_ciphertext, slack_webhook_iv, slack_enabled FROM user_alert_integrations WHERE user_id = ?').bind(userId).first();
   if (integration?.slack_enabled && integration.slack_webhook_ciphertext && integration.slack_webhook_iv) {
@@ -320,7 +324,7 @@ async function monitorWithStats(env, monitor) {
 }
 async function api(request, env) {
   const url = new URL(request.url); const path = url.pathname;
-  if (path === '/health' || path === '/api/health') return json({ success: true, message: 'WebWatch API is healthy', capabilities: { accountEmails: Boolean(env.RESEND_API_KEY), slackAlerts: Boolean(env.SLACK_WEBHOOK_URL) } });
+  if (path === '/health' || path === '/api/health') return json({ success: true, message: 'WebWatch API is healthy', capabilities: { accountEmails: Boolean(env.RESEND_API_KEY), slackAlerts: env.BILLING_ENABLED === 'true' } });
   if (path === '/api/health/ready') return json({ success: true, ready: true, database: 'ok', scheduler: 'cloudflare-cron' });
   if (path === '/api/webhooks/dodo' && request.method === 'POST') return handleDodoWebhook(request, env);
   if (path === '/api/integrations/slack/callback' && request.method === 'GET') {
@@ -415,8 +419,8 @@ async function api(request, env) {
     const paid = await env.DB.prepare('SELECT paid_monitors_count FROM users WHERE id = ?').bind(user.id).first();
     const { results: payments } = await env.DB.prepare('SELECT id, quantity, amount, currency, status, created_at FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').bind(user.id).all();
     const billingEnabled = env.BILLING_ENABLED === 'true';
-    const monitorLimit = billingEnabled ? Number(paid?.paid_monitors_count || 0) : null;
-    return json({ success: true, billingEnabled, monitorLimit, paidMonitorsCount: Number(paid?.paid_monitors_count || 0), activeMonitorsCount: count.count, availableSlots: billingEnabled ? Math.max(0, monitorLimit - count.count) : null, pricePerSiteUsd: 1, payments: payments.map((payment) => ({ id: payment.id, quantity: payment.quantity, amount: payment.amount, currency: payment.currency, status: payment.status, createdAt: payment.created_at })) });
+    const monitorLimit = billingEnabled ? Number(paid?.paid_monitors_count || 0) : FREE_MONITOR_LIMIT;
+    return json({ success: true, billingEnabled, monitorLimit, freeMonitorLimit: FREE_MONITOR_LIMIT, paidMonitorsCount: Number(paid?.paid_monitors_count || 0), activeMonitorsCount: count.count, availableSlots: Math.max(0, monitorLimit - count.count), pricePerSiteUsd: 1, payments: payments.map((payment) => ({ id: payment.id, quantity: payment.quantity, amount: payment.amount, currency: payment.currency, status: payment.status, createdAt: payment.created_at })) });
   }
   if (path === '/api/billing/create-checkout' && request.method === 'POST') {
     if (env.BILLING_ENABLED !== 'true' || !env.DODO_PAYMENTS_PRODUCT_ID || !dodoClient(env)) return error('Billing is not configured yet.', 503);
@@ -449,9 +453,10 @@ async function api(request, env) {
   }
   if (path === '/api/integrations' && request.method === 'GET') {
     const integration = await env.DB.prepare('SELECT slack_webhook_ciphertext, slack_enabled, updated_at FROM user_alert_integrations WHERE user_id = ?').bind(user.id).first();
-    return json({ success: true, slack: { configured: Boolean(integration?.slack_webhook_ciphertext), enabled: Boolean(integration?.slack_enabled), updatedAt: integration?.updated_at || null } });
+    return json({ success: true, slack: { available: env.BILLING_ENABLED === 'true', configured: Boolean(integration?.slack_webhook_ciphertext), enabled: Boolean(integration?.slack_enabled) && env.BILLING_ENABLED === 'true', updatedAt: integration?.updated_at || null } });
   }
   if (path === '/api/integrations/slack/connect' && request.method === 'GET') {
+    if (env.BILLING_ENABLED !== 'true') return error('Slack alerts are part of the upcoming paid plan.', 403);
     if (!env.SLACK_CLIENT_ID || !env.SLACK_CLIENT_SECRET) return error('Slack connection is not configured yet.', 503);
     const redirectUri = `${env.CLIENT_ORIGIN}/api/integrations/slack/callback`;
     const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
@@ -462,6 +467,7 @@ async function api(request, env) {
     return json({ success: true, authorizeUrl: authorizeUrl.toString() });
   }
   if (path === '/api/integrations/slack' && request.method === 'PUT') {
+    if (env.BILLING_ENABLED !== 'true') return error('Slack alerts are part of the upcoming paid plan.', 403);
     const body = await request.json().catch(() => ({})); const webhook = validSlackWebhook(body.webhookUrl);
     if (!webhook) return error('Paste a valid Slack Incoming Webhook URL.');
     let encrypted;
@@ -480,6 +486,7 @@ async function api(request, env) {
     const own = await env.DB.prepare('SELECT COUNT(*) AS count FROM monitors WHERE user_id = ?').bind(user.id).first();
     const entitlement = await env.DB.prepare('SELECT paid_monitors_count FROM users WHERE id = ?').bind(user.id).first();
     const limit = Number(entitlement?.paid_monitors_count || 0);
+    if (env.BILLING_ENABLED !== 'true' && own.count >= FREE_MONITOR_LIMIT) return json({ success: false, message: 'The free launch plan includes one website. The $1 plan with two websites and Slack alerts is coming soon.', planUnavailable: true }, 403);
     if (env.BILLING_ENABLED === 'true' && own.count >= limit) return json({ success: false, message: 'Buy a $1/month site slot before adding another monitor.', requiresPayment: true }, 402);
     const interval = Number(body.intervalMinutes || 5); if (![5, 10, 15].includes(interval)) return error('Interval must be 5, 10, or 15 minutes');
     const alertEmail = String(body.alertEmail || user.email).trim().toLowerCase();
@@ -499,7 +506,7 @@ async function api(request, env) {
     if (!monitor) return error('Monitor not found', 404);
     if (!monitor.alert_email_verified_at) return error('Confirm the alert email before sending a test alert.', 409);
     await sendAlert(env, monitor, 'test', { attempts: 1, error: null, statusCode: null }, null);
-    return json({ success: true, message: 'Test alert sent to your verified email and connected Slack channels.' });
+    return json({ success: true, message: env.BILLING_ENABLED === 'true' ? 'Test alert sent to your verified email and connected Slack channels.' : 'Test email alert sent to your verified email.' });
   }
   const match = path.match(/^\/api\/monitors\/([^/]+)(?:\/(check|history))?$/); if (!match) return error('Route not found', 404);
   const monitor = await env.DB.prepare('SELECT m.*, u.email FROM monitors m JOIN users u ON u.id = m.user_id WHERE m.id = ? AND m.user_id = ?').bind(match[1], user.id).first(); if (!monitor) return error('Monitor not found', 404);
