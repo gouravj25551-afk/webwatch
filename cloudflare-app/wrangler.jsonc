@@ -16,6 +16,7 @@
   "vars": {
     "CLIENT_ORIGIN": "https://webwatch.site",
     "ALERT_FROM": "WebWatch <alerts@notify.webwatch.site>",
+    "SLACK_CLIENT_ID": "12231674704224.12203372243810",
     "DODO_PAYMENTS_PRODUCT_ID": "pdt_ONohhznQzXLJ1FVrVtNPU",
     "DODO_PAYMENTS_MODE": "live_mode",
     "COOKIE_NAME": "webwatch_token",

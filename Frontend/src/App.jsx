@@ -418,7 +418,6 @@ function MonitorCard({ monitor, busy, onCheck, onTestAlert, onToggle, onDelete, 
 
 function IntegrationsPanel() {
   const [slack, setSlack] = useState(null)
-  const [webhookUrl, setWebhookUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -434,14 +433,11 @@ function IntegrationsPanel() {
 
   useEffect(() => { load() }, [load])
 
-  async function save(event) {
-    event.preventDefault()
+  async function connect() {
     setSaving(true); setError(''); setMessage('')
     try {
-      await api('/api/integrations/slack', { method: 'PUT', body: JSON.stringify({ webhookUrl }) })
-      setWebhookUrl('')
-      setMessage('Slack is connected. Use Test alert on any monitor to confirm delivery.')
-      await load()
+      const data = await api('/api/integrations/slack/connect')
+      window.location.assign(data.authorizeUrl)
     } catch (requestError) { setError(requestError.message) } finally { setSaving(false) }
   }
 
@@ -457,14 +453,11 @@ function IntegrationsPanel() {
 
   return (
     <section className="integrations-panel" id="integrations">
-      <div className="integration-heading"><div><span className="eyebrow">Your alert channels</span><h2>Integrations</h2><p>Connect your own Slack channel. Your webhook is encrypted before it is stored.</p></div>{slack?.configured && <span className="status-badge up">Slack connected</span>}</div>
+      <div className="integration-heading"><div><span className="eyebrow">Your alert channels</span><h2>Integrations</h2><p>Connect Slack, choose a channel, and WebWatch will deliver alerts there.</p></div>{slack?.configured && <span className="status-badge up">Slack connected</span>}</div>
       {loading ? <p className="subtle">Loading integrations…</p> : slack?.configured ? <div className="integration-connected"><span>Slack alerts are on for your monitors.</span><button className="text-button danger" onClick={remove} disabled={saving}>{saving ? 'Working…' : 'Disconnect Slack'}</button></div> : (
-        <form className="integration-form" onSubmit={save}>
-          <label>Slack Incoming Webhook URL<input type="url" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder="https://hooks.slack.com/services/..." required /></label>
-          <button className="primary" disabled={saving}>{saving ? 'Connecting…' : 'Connect Slack'}</button>
-        </form>
+        <div className="integration-form"><div><b>Slack</b><p>Authorize WebWatch, then select the channel that should receive your alerts.</p></div><button type="button" className="primary" onClick={connect} disabled={saving}>{saving ? 'Opening Slack…' : 'Connect Slack'}</button></div>
       )}
-      {!slack?.configured && <p className="subtle">In Slack: create an Incoming Webhook, choose your alerts channel, then paste the URL here.</p>}
+      {!slack?.configured && <p className="subtle">No webhook URL to copy or share.</p>}
       {error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}
     </section>
   )

@@ -103,6 +103,15 @@ async function decryptIntegration(ciphertext, iv, env) {
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64UrlToBytes(iv) }, await integrationKey(env), base64UrlToBytes(ciphertext));
   return new TextDecoder().decode(plaintext);
 }
+async function slackOAuthState(userId, env) {
+  const payload = bytesToBase64Url(encoder.encode(JSON.stringify({ userId, exp: Date.now() + 10 * 60_000, nonce: id() })));
+  return `${payload}.${await hmac(payload, env.JWT_SECRET)}`;
+}
+async function slackOAuthUser(state, env) {
+  const [payload, signature] = String(state || '').split('.');
+  if (!payload || !signature || signature !== await hmac(payload, env.JWT_SECRET)) return null;
+  try { const data = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))); return data.exp > Date.now() && typeof data.userId === 'string' ? data.userId : null; } catch { return null; }
+}
 async function sessionFor(user, env) {
   const header = bytesToBase64Url(encoder.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
   const payload = bytesToBase64Url(encoder.encode(JSON.stringify({ sub: user.id, sv: user.session_version, exp: Math.floor(Date.now() / 1000) + 604800 })));
@@ -314,6 +323,22 @@ async function api(request, env) {
   if (path === '/health' || path === '/api/health') return json({ success: true, message: 'WebWatch API is healthy', capabilities: { accountEmails: Boolean(env.RESEND_API_KEY), slackAlerts: Boolean(env.SLACK_WEBHOOK_URL) } });
   if (path === '/api/health/ready') return json({ success: true, ready: true, database: 'ok', scheduler: 'cloudflare-cron' });
   if (path === '/api/webhooks/dodo' && request.method === 'POST') return handleDodoWebhook(request, env);
+  if (path === '/api/integrations/slack/callback' && request.method === 'GET') {
+    const userId = await slackOAuthUser(url.searchParams.get('state'), env);
+    const returnUrl = new URL(env.CLIENT_ORIGIN);
+    if (!userId || url.searchParams.get('error') || !env.SLACK_CLIENT_ID || !env.SLACK_CLIENT_SECRET) { returnUrl.searchParams.set('slack', 'error'); return Response.redirect(returnUrl.toString(), 302); }
+    const redirectUri = `${env.CLIENT_ORIGIN}/api/integrations/slack/callback`;
+    const credentials = btoa(`${env.SLACK_CLIENT_ID}:${env.SLACK_CLIENT_SECRET}`);
+    const response = await fetch('https://slack.com/api/oauth.v2.access', { method: 'POST', headers: { authorization: `Basic ${credentials}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code: url.searchParams.get('code') || '', redirect_uri: redirectUri }) });
+    const data = await response.json().catch(() => ({})); const webhook = validSlackWebhook(data?.incoming_webhook?.url);
+    if (!response.ok || !data.ok || !webhook) { returnUrl.searchParams.set('slack', 'error'); return Response.redirect(returnUrl.toString(), 302); }
+    try {
+      const encrypted = await encryptIntegration(webhook, env); const updatedAt = now();
+      await env.DB.prepare('INSERT INTO user_alert_integrations (user_id, slack_webhook_ciphertext, slack_webhook_iv, slack_enabled, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?) ON CONFLICT(user_id) DO UPDATE SET slack_webhook_ciphertext = excluded.slack_webhook_ciphertext, slack_webhook_iv = excluded.slack_webhook_iv, slack_enabled = 1, updated_at = excluded.updated_at').bind(userId, encrypted.ciphertext, encrypted.iv, updatedAt, updatedAt).run();
+      returnUrl.searchParams.set('slack', 'connected');
+    } catch { returnUrl.searchParams.set('slack', 'error'); }
+    return Response.redirect(returnUrl.toString(), 302);
+  }
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !sameOrigin(request, env)) return error('Invalid request origin', 403);
   if (path === '/api/check' && request.method === 'POST') { const body = await request.json(); const target = validUrl(body.url); return target ? json({ success: true, ...(await checkUrl(target.toString(), 1)) }) : error('Enter a public HTTP or HTTPS URL'); }
   if (path === '/api/auth/register' && request.method === 'POST') {
@@ -425,6 +450,16 @@ async function api(request, env) {
   if (path === '/api/integrations' && request.method === 'GET') {
     const integration = await env.DB.prepare('SELECT slack_webhook_ciphertext, slack_enabled, updated_at FROM user_alert_integrations WHERE user_id = ?').bind(user.id).first();
     return json({ success: true, slack: { configured: Boolean(integration?.slack_webhook_ciphertext), enabled: Boolean(integration?.slack_enabled), updatedAt: integration?.updated_at || null } });
+  }
+  if (path === '/api/integrations/slack/connect' && request.method === 'GET') {
+    if (!env.SLACK_CLIENT_ID || !env.SLACK_CLIENT_SECRET) return error('Slack connection is not configured yet.', 503);
+    const redirectUri = `${env.CLIENT_ORIGIN}/api/integrations/slack/callback`;
+    const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
+    authorizeUrl.searchParams.set('client_id', env.SLACK_CLIENT_ID);
+    authorizeUrl.searchParams.set('scope', 'incoming-webhook');
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('state', await slackOAuthState(user.id, env));
+    return json({ success: true, authorizeUrl: authorizeUrl.toString() });
   }
   if (path === '/api/integrations/slack' && request.method === 'PUT') {
     const body = await request.json().catch(() => ({})); const webhook = validSlackWebhook(body.webhookUrl);
