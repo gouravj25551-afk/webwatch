@@ -324,7 +324,7 @@ async function monitorWithStats(env, monitor) {
 }
 async function api(request, env) {
   const url = new URL(request.url); const path = url.pathname;
-  if (path === '/health' || path === '/api/health') return json({ success: true, message: 'WebWatch API is healthy', capabilities: { accountEmails: Boolean(env.RESEND_API_KEY), slackAlerts: Boolean(env.SLACK_WEBHOOK_URL) } });
+  if (path === '/health' || path === '/api/health') return json({ success: true, message: 'WebWatch API is healthy', capabilities: { accountEmails: Boolean(env.RESEND_API_KEY), slackAlerts: env.BILLING_ENABLED === 'true' } });
   if (path === '/api/health/ready') return json({ success: true, ready: true, database: 'ok', scheduler: 'cloudflare-cron' });
   if (path === '/api/webhooks/dodo' && request.method === 'POST') return handleDodoWebhook(request, env);
   if (path === '/api/integrations/slack/callback' && request.method === 'GET') {
